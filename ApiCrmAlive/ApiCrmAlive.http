@@ -1,0 +1,6 @@
+@ApiCrmAlive_HostAddress = http://localhost:5214
+
+GET {{ApiCrmAlive_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
