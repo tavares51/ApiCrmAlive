@@ -1,24 +1,61 @@
-using ApiCrmAlive.Services.Users;
+ï»¿using ApiCrmAlive.Services.Users;
 using ApiCrmAlive.Context;
 using ApiCrmAlive.Repositories.Users;
 using ApiCrmAlive.Repositories;
 using ApiCrmAlive.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
-using Microsoft.Extensions.Logging;
+using DotNetEnv;
 using ApiCrmAlive.Services.Customers;
 using ApiCrmAlive.Repositories.Customers;
+using ApiCrmAlive.Mappers.Vehicles;
+using ApiCrmAlive.Services.Vehicles;
+using ApiCrmAlive.Repositories.Vehicles;
+using ApiCrmAlive.Utils;
 
 var builder = WebApplication.CreateBuilder(args);
+static void LoadEnvFromLikelyLocations()
+{
+    var cwd = Directory.GetCurrentDirectory();
+    var direct = Path.Combine(cwd, ".env");
+    if (File.Exists(direct)) { Env.Load(direct); return; }
 
-// HttpClient
+    var probe = cwd;
+    for (int i = 0; i < 5; i++)
+    {
+        probe = Directory.GetParent(probe)?.FullName ?? probe;
+        var candidate = Path.Combine(probe, ".env");
+        if (File.Exists(candidate)) { Env.Load(candidate); return; }
+    }
+
+    try { Env.Load(); } catch { /* ignore */ }
+}
+LoadEnvFromLikelyLocations();
+
+builder.Configuration.AddEnvironmentVariables();
 builder.Services.AddHttpClient();
 
-// Connection string
-string cs = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? throw new InvalidOperationException("Connection string 'DefaultConnection' is missing.");
+string? cs = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrWhiteSpace(cs))
+{
+    var dbHost = Environment.GetEnvironmentVariable("DB_HOST");
+    var dbPort = Environment.GetEnvironmentVariable("DB_PORT") ?? "5432";
+    var dbName = Environment.GetEnvironmentVariable("DB_NAME");
+    var dbUser = Environment.GetEnvironmentVariable("DB_USER");
+    var dbPass = Environment.GetEnvironmentVariable("DB_PASSWORD");
 
-// DbContext Pool + Npgsql
+    if (string.IsNullOrWhiteSpace(dbHost) ||
+        string.IsNullOrWhiteSpace(dbName) ||
+        string.IsNullOrWhiteSpace(dbUser) ||
+        string.IsNullOrWhiteSpace(dbPass))
+    {
+        throw new InvalidOperationException(
+            "Connection string 'DefaultConnection' ausente e variÃ¡veis de ambiente DB_* nÃ£o definidas.");
+    }
+
+    cs = $"Host={dbHost};Port={dbPort};Database={dbName};Username={dbUser};Password={dbPass};Ssl Mode=Require;Trust Server Certificate=true";
+}
+
 builder.Services.AddDbContextPool<AppDbContext>(options =>
     options.UseNpgsql(cs, npgsql =>
     {
@@ -27,20 +64,20 @@ builder.Services.AddDbContextPool<AppDbContext>(options =>
     })
     .LogTo(Console.WriteLine, LogLevel.Information)
 );
+
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
-// DI
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<IUserService, UserService>();
-builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<ICustomerRepository, CustomerRepository>();
-
-// Controllers
+builder.Services.AddScoped<ICustomerService, CustomerService>();
+builder.Services.AddScoped<IVehicleRepository, VehicleRepository>();
+builder.Services.AddScoped<IVehicleService, VehicleService>();
+builder.Services.AddSingleton<VehicleMapper>();
+builder.Services.AddSingleton<SupabaseFileUploader>();
 builder.Services.AddControllers();
-
-// Swagger/OpenAPI (ESSENCIAL para gerar "openapi": "3.x.y")
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -48,21 +85,30 @@ builder.Services.AddSwaggerGen(c =>
     {
         Title = "API CRM Alive",
         Version = "v1",
-        Description = "Endpoints de Usuários"
+        Description = "Endpoints da API CRM Alive"
     });
-    c.EnableAnnotations(); // opcional
+    c.EnableAnnotations();
+});
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+    );
 });
 
 var app = builder.Build();
 
-// Swagger SEM proteção/redirect (evita HTML no lugar do JSON)
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
-    // tem que bater com o nome do doc acima ("v1")
     c.SwaggerEndpoint("/swagger/v1/swagger.json", "API CRM Alive v1");
-    c.RoutePrefix = "swagger"; // abre em /swagger
+    c.RoutePrefix = "swagger";
 });
+
+app.UseCors("AllowAll");
 
 app.UseHttpsRedirection();
 app.UseAuthorization();
