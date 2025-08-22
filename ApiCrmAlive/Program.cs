@@ -12,6 +12,8 @@ using ApiCrmAlive.Mappers.Vehicles;
 using ApiCrmAlive.Services.Vehicles;
 using ApiCrmAlive.Repositories.Vehicles;
 using ApiCrmAlive.Utils;
+using ApiCrmAlive.Repositories.Leads;
+using ApiCrmAlive.Services.Leads;
 
 var builder = WebApplication.CreateBuilder(args);
 static void LoadEnvFromLikelyLocations()
@@ -75,6 +77,8 @@ builder.Services.AddScoped<ICustomerRepository, CustomerRepository>();
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IVehicleRepository, VehicleRepository>();
 builder.Services.AddScoped<IVehicleService, VehicleService>();
+builder.Services.AddScoped<ILeadService, LeadService>();
+builder.Services.AddScoped<ILeadRepository, LeadRepository>();
 builder.Services.AddSingleton<VehicleMapper>();
 builder.Services.AddSingleton<SupabaseFileUploader>();
 builder.Services.AddControllers();
