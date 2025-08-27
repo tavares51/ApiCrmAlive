@@ -19,6 +19,7 @@ namespace ApiCrmAlive.Context
         public DbSet<Vehicle> Vehicles { get; set; }
         public DbSet<Lead> Leads { get; set; }
         public DbSet<LeadInteraction> LeadInteractions { get; set; }
+        public DbSet<Sale> Sales { get; set; }
 
     }
 }
