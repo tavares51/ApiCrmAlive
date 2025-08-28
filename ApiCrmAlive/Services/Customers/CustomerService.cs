@@ -1,5 +1,4 @@
 ﻿using ApiCrmAlive.DTOs.Customers;
-using ApiCrmAlive.Models;
 using ApiCrmAlive.Repositories.Customers;
 using ApiCrmAlive.Mappers.Customers;
 using Microsoft.EntityFrameworkCore;
