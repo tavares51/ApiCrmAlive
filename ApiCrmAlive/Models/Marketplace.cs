@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using ApiCrmAlive.Utils;
+using System.ComponentModel.DataAnnotations;
 
 namespace ApiCrmAlive.Models;
 
@@ -13,6 +14,8 @@ public class Marketplace
     public string? Description { get; set; }
 
     public bool IsActive { get; set; } = true;
+
+    public MarketPlaceType? Type { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

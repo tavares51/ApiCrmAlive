@@ -1,0 +1,74 @@
+{
+  "title": "ANUNCIO TESTE .NET PROVA CARRO - NAO COMPRAR",
+  "description": "Veículo em ótimo estado",
+  "channels": [
+    "marketplace"
+  ],
+  "pictures": [
+    {
+      "source": "https://cdn.pixabay.com/photo/2017/06/15/04/13/car-2404064__340.png"
+    },
+    {
+      "source": "https://cdn.pixabay.com/photo/2018/03/06/19/44/mercedes-benz-3204364__340.png"
+    }
+  ],
+  "video_id": "sJLCxVgshzY",
+  "category_id": "MLB1744",
+  "price": 100000,
+  "currency_id": "BRL",
+  "listing_type_id": "silver",
+  "available_quantity": 1,
+  "location": {
+    "address_line": "Avenida Juruce, 436",
+    "zip_code": "04080011",
+    "city": {
+      "id": "BR-SP-56"
+    }
+  },
+  "attributes": [
+    {
+      "id": "BRAND",
+      "value_name": "Kia"
+    },
+    {
+      "id": "MODEL",
+      "value_name": "Soul"
+    },
+    {
+      "id": "VEHICLE_YEAR",
+      "value_name": "2012"
+    },
+    {
+      "id": "DOORS",
+      "value_name": "4"
+    },
+    {
+      "id": "KILOMETERS",
+      "value_name": "92000 km"
+    },
+    {
+      "id": "FUEL_TYPE",
+      "value_name": "Gasolina"
+    },
+    {
+      "id": "COLOR",
+      "value_name": "Preto"
+    },
+    {
+      "id": "ITEM_CONDITION",
+      "value_name": "Usado"
+    },
+    {
+      "id": "LICENSE_PLATE",
+      "value_name": "EWP5306"
+    },
+    {
+      "id": "PASSENGER_CAPACITY",
+      "value_name": "5"
+    },
+    {
+      "id": "TRIM",
+      "value_name": "XRS"
+    }
+  ]
+}

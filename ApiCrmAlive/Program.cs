@@ -18,6 +18,7 @@ using ApiCrmAlive.Services.Sales;
 using ApiCrmAlive.Repositories.Sales;
 using ApiCrmAlive.Services.Marketplaces;
 using ApiCrmAlive.Repositories.Marketplaces;
+using ApiCrmAlive.Services.Marketplaces.MercadoLivre;
 
 var builder = WebApplication.CreateBuilder(args);
 static void LoadEnvFromLikelyLocations()
@@ -85,6 +86,11 @@ builder.Services.AddScoped<ILeadService, LeadService>();
 builder.Services.AddScoped<ILeadRepository, LeadRepository>();
 builder.Services.AddScoped<ISaleRepository, SaleRepository>();
 builder.Services.AddScoped<ISaleService, SaleService>();
+builder.Services.AddHttpClient<IMercadoLivreAuthService, MercadoLivreAuthService>(client =>
+{
+    client.BaseAddress = new Uri("https://api.mercadolibre.com/");
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+});
 
 builder.Services.AddScoped<IMarketplaceConfigurationRepository, MarketplaceConfigurationRepository>();
 builder.Services.AddScoped<IMarketplaceLogRepository, MarketplaceLogRepository>();
