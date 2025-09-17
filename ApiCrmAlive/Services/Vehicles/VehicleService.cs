@@ -4,7 +4,6 @@ using ApiCrmAlive.Mappers.Vehicles;
 using ApiCrmAlive.Repositories.Vehicles;
 using ApiCrmAlive.Utils;
 using Microsoft.EntityFrameworkCore;
-using Supabase;
 
 namespace ApiCrmAlive.Services.Vehicles;
 
@@ -92,6 +91,31 @@ public class VehicleService(IVehicleRepository repo, IUnitOfWork uow, VehicleMap
         v.UpdatedAt = DateTime.UtcNow;
         v.UpdatedBy = updatedBy;
         v.PhotosJson = JsonSerializer.Serialize(dto.Photos);
+        v.Fuel = dto.Fuel;
+        v.Transmission = dto.Transmission;
+        v.Mileage = dto.Mileage;
+        v.CostPrice = dto.CostPrice;
+        v.EntryDate = dto.EntryDate;
+        v.Description = dto.Description;
+        v.Features = dto.Features;
+        v.YearModel = dto.YearModel;
+        v.State = dto.State;
+        v.ColorIntern = dto.ColorIntern;
+        v.Power = dto.Power;
+        v.Doors = dto.Doors;
+        v.Seats = dto.Seats;
+        v.Speed = dto.Speed;
+        v.Engine = dto.Engine;
+        v.ApprovedInjunction = dto.ApprovedInjunction;
+        v.DescInjuntion = dto.DescInjuntion;
+        v.Chassis = dto.Chassis;
+        v.Steering = dto.Steering;
+        v.Category = dto.Category;
+        v.EntryMileage = dto.EntryMileage;
+        v.Renavam = dto.Renavam;
+        v.ModelDesc = dto.ModelDesc;
+        v.PreviousOwnerId = dto.PreviousOwnerId;
+        v.Version = dto.Version;
 
         _repo.Update(v);
         await _uow.SaveChangesAsync(ct);

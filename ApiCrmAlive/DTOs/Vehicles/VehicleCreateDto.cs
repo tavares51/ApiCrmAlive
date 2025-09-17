@@ -1,4 +1,5 @@
 ﻿using ApiCrmAlive.Utils;
+using System.ComponentModel.DataAnnotations;
 
 namespace ApiCrmAlive.DTOs.Vehicles;
 
@@ -22,4 +23,41 @@ public class VehicleCreateDto
     public Guid? PreviousOwnerId { get; set; }
     public VehicleStatusEnum? Status { get; set; }
     public TransmissionEnum Transmission { get; internal set; }
+    public int YearModel { get; set; }
+
+    [MaxLength(2)]
+    public string? State { get; set; }
+
+    [MaxLength(50)]
+    public string? ColorIntern { get; set; }
+
+    [MaxLength(10)]
+    public string? Power { get; set; }
+
+    public int? Doors { get; set; }
+
+    public int? Seats { get; set; }
+
+    public int? Speed { get; set; }
+
+    public decimal? Engine { get; set; }
+
+    public bool? ApprovedInjunction { get; set; } = false;
+
+    public string? DescInjuntion { get; set; }
+
+    [MaxLength(17)]
+    public string? Chassis { get; set; }
+
+    public SteeringEnum Steering { get; set; } = SteeringEnum.eletrica;
+
+    public CategoryEnum Category { get; set; } = CategoryEnum.outros;
+
+    public int EntryMileage { get; set; }
+
+    public int? Renavam { get; set; }
+
+    public string? ModelDesc { get; set; }
+
+    public string? Version { get; set; }
 }
