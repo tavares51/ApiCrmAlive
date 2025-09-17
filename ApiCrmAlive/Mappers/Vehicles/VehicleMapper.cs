@@ -28,7 +28,24 @@ public class VehicleMapper()
         PreviousOwnerId = v.PreviousOwnerId,
         CreatedAt = v.CreatedAt,
         UpdatedAt = v.UpdatedAt,
-        UpdatedBy = v.UpdatedBy
+        UpdatedBy = v.UpdatedBy,
+        YearModel = v.YearModel,
+        State = v.State,
+        ColorIntern = v.ColorIntern,
+        Power = v.Power,
+        Doors = v.Doors,
+        Seats = v.Seats,
+        Speed = v.Speed,
+        Engine = v.Engine,
+        ApprovedInjunction = v.ApprovedInjunction,
+        DescInjuntion = v.DescInjuntion,
+        Chassis = v.Chassis,
+        Steering = v.Steering,
+        Category = v.Category,
+        EntryMileage = v.EntryMileage,
+        Renavam = v.Renavam,
+        ModelDesc = v.ModelDesc,
+        Version = v.Version
     };
 
     public Vehicle FromCreateDto(VehicleCreateDto dto, Guid updatedBy) => new()
@@ -52,7 +69,24 @@ public class VehicleMapper()
         PreviousOwnerId = dto.PreviousOwnerId,
         CreatedAt = DateTime.UtcNow,
         UpdatedAt = DateTime.UtcNow,
-        UpdatedBy = updatedBy
+        UpdatedBy = updatedBy,
+        YearModel = dto.YearModel,
+        State = dto.State?.Trim(),
+        ColorIntern = dto.ColorIntern?.Trim(),
+        Power = dto.Power?.Trim(),
+        Doors = dto.Doors,
+        Seats = dto.Seats,
+        Speed = dto.Speed,
+        Engine = dto.Engine,
+        ApprovedInjunction = dto.ApprovedInjunction,
+        DescInjuntion = string.IsNullOrWhiteSpace(dto.DescInjuntion) ? null : dto.DescInjuntion.Trim(),
+        Chassis = dto.Chassis?.Trim(),
+        Steering = dto.Steering,
+        Category = dto.Category,
+        EntryMileage = dto.EntryMileage,
+        Renavam = dto.Renavam,
+        ModelDesc = dto.ModelDesc?.Trim(),
+        Version = dto.Version?.Trim()
     };
 
     public void ApplyUpdate(Vehicle v, VehicleUpdateDto dto, Guid updatedBy)
