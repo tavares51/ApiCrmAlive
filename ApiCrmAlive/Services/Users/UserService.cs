@@ -22,12 +22,15 @@ public class UserService(IUserRepository repo,
         var role = string.IsNullOrWhiteSpace(input.Role) ? "vendedor" : input.Role!.Trim().ToLowerInvariant();
         if (!AllowedRoles.Contains(role)) throw new ArgumentException("Role inválida. Use admin, gerente ou vendedor.");
 
+        AuthHelper.CreatePasswordHash(input.Password, out var hash, out var salt);
+
         var user = new User
         {
             Id = Guid.NewGuid(),
             Name = input.Name.Trim(),
             Email = input.Email.Trim().ToLowerInvariant(),
-            PasswordHash = PasswordHasher.Hash(input.Password),
+            PasswordHash = hash,
+            PasswordSalt = salt,
             Role = role,
             Phone = string.IsNullOrWhiteSpace(input.Phone) ? null : input.Phone!.Trim(),
             ReceiveNotifications = input.ReceiveNotifications ?? true,
@@ -58,23 +61,6 @@ public class UserService(IUserRepository repo,
         if (input.Phone is not null) user.Phone = string.IsNullOrWhiteSpace(input.Phone) ? null : input.Phone.Trim();
         if (input.ReceiveNotifications is not null) user.ReceiveNotifications = input.ReceiveNotifications.Value;
 
-        user.UpdatedAt = DateTime.UtcNow;
-        user.UpdatedBy = updatedBy;
-
-        repo.Update(user);
-        await uow.SaveChangesAsync(ct);
-
-        return ToDto(user);
-    }
-
-    public async Task<UserDto> UpdatePasswordAsync(Guid id, UserPasswordUpdateDto input, Guid updatedBy, CancellationToken ct = default)
-    {
-        var user = await repo.GetByIdAsync(id, ct) ?? throw new KeyNotFoundException("Usuário não encontrado.");
-
-        if (!PasswordHasher.Verify(input.CurrentPassword, user.PasswordHash))
-            throw new UnauthorizedAccessException("Senha atual inválida.");
-
-        user.PasswordHash = PasswordHasher.Hash(input.NewPassword);
         user.UpdatedAt = DateTime.UtcNow;
         user.UpdatedBy = updatedBy;
 
@@ -143,5 +129,27 @@ public class UserService(IUserRepository repo,
             .OrderBy(u => u.Name)
             .Select(u => ToDto(u))
             .ToListAsync(ct);
+    }
+
+    public async Task<bool> UpdatePasswordAsync(Guid userId, string currentPassword, string newPassword)
+    {
+        var client = await repo.GetByIdAsync(userId);
+        if (client == null)
+            return false;
+
+        var isValid = AuthHelper.VerifyPasswordHash(currentPassword, client.PasswordHash, client.PasswordSalt);
+        if (!isValid)
+            throw new Exception("Senha atual incorreta.");
+
+        AuthHelper.CreatePasswordHash(newPassword, out var hash, out var salt);
+        client.PasswordHash = hash;
+        client.PasswordSalt = salt;
+
+        return await repo.UpdatePasswordAsync(client);
+    }
+
+    public async Task<User> GetEmailAsync(string email, CancellationToken ct = default)
+    {
+        return await repo.GetByEmailAsync(email.Trim().ToLowerInvariant(), ct) ?? throw new KeyNotFoundException("Usuário não encontrado.");
     }
 }

@@ -12,4 +12,13 @@ public class UserRepository(AppDbContext ctx) : Repository<User>(ctx), IUserRepo
 
     public Task<User?> GetByEmailAsync(string email, CancellationToken ct = default)
         => _db.FirstOrDefaultAsync(u => u.Email == email, ct);
+
+    public async Task<bool> UpdatePasswordAsync(User user)
+    {
+        _ctx.Attach(user);
+        _ctx.Entry(user).Property(x => x.PasswordHash).IsModified = true;
+        _ctx.Entry(user).Property(x => x.PasswordSalt).IsModified = true;
+
+        return await _ctx.SaveChangesAsync() > 0;
+    }
 }
