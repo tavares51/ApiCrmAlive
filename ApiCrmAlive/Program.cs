@@ -4,6 +4,7 @@ using ApiCrmAlive.Repositories.Users;
 using ApiCrmAlive.Repositories;
 using ApiCrmAlive.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.OpenApi.Models;
 using DotNetEnv;
 using ApiCrmAlive.Services.Customers;
@@ -18,9 +19,14 @@ using ApiCrmAlive.Services.Sales;
 using ApiCrmAlive.Repositories.Sales;
 using ApiCrmAlive.Services.Marketplaces;
 using ApiCrmAlive.Repositories.Marketplaces;
+using Microsoft.IdentityModel.Tokens;
 using ApiCrmAlive.Services.Marketplaces.MercadoLivre;
+using ApiCrmAlive.Services.JWT;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+var jwtSettings = builder.Configuration.GetSection("JwtSettings");
+var secretKey = jwtSettings["Secret"]!;
 static void LoadEnvFromLikelyLocations()
 {
     var cwd = Directory.GetCurrentDirectory();
@@ -86,6 +92,8 @@ builder.Services.AddScoped<ILeadService, LeadService>();
 builder.Services.AddScoped<ILeadRepository, LeadRepository>();
 builder.Services.AddScoped<ISaleRepository, SaleRepository>();
 builder.Services.AddScoped<ISaleService, SaleService>();
+builder.Services.AddScoped<JwtTokenService>();
+
 builder.Services.AddHttpClient<IMercadoLivreAuthService, MercadoLivreAuthService>(client =>
 {
     client.BaseAddress = new Uri("https://api.mercadolibre.com/");
@@ -103,15 +111,34 @@ builder.Services.AddSingleton<VehicleMapper>();
 builder.Services.AddSingleton<SupabaseFileUploader>();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c =>
+builder.Services.AddSwaggerGen(options =>
 {
-    c.SwaggerDoc("v1", new OpenApiInfo
+    options.SwaggerDoc("v1", new() { Title = "API CRM Alive", Version = "v1" });
+
+    options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
     {
-        Title = "API CRM Alive",
-        Version = "v1",
-        Description = "Endpoints da API CRM Alive"
+        Name = "Authorization",
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+        Scheme = "Bearer",
+        BearerFormat = "JWT",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+        Description = "Insira o token JWT no formato: **Bearer {seu_token_aqui}**"
     });
-    c.EnableAnnotations();
+
+    options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+    {
+        {
+            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            {
+                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                {
+                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
 });
 
 builder.Services.AddCors(options =>
@@ -122,6 +149,27 @@ builder.Services.AddCors(options =>
               .AllowAnyHeader()
     );
 });
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = jwtSettings["Issuer"],
+        ValidAudience = jwtSettings["Audience"],
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
+    };
+});
+
+builder.Services.AddAuthorization();
 
 var app = builder.Build();
 

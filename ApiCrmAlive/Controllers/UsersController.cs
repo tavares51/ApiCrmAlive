@@ -1,5 +1,8 @@
 ﻿using ApiCrmAlive.DTOs.Users;
+using ApiCrmAlive.Services.JWT;
 using ApiCrmAlive.Services.Users;
+using ApiCrmAlive.Utils;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Swashbuckle.AspNetCore.Annotations;
 
@@ -15,7 +18,6 @@ public class UsersController(IUserService service) : ControllerBase
     [HttpGet]
     [SwaggerOperation(Summary = "Lista usuários (sem paginação)")]
     [SwaggerResponse(200, "Lista de usuários", typeof(IEnumerable<UserDto>))]
-    // [SwaggerResponseExample(200, typeof(UsersArrayExample))] // opcional, se você estiver usando examples
     public async Task<ActionResult<IEnumerable<UserDto>>> GetAll(
         [FromQuery] string? role = null,
         [FromQuery] bool? isActive = null,
@@ -83,5 +85,27 @@ public class UsersController(IUserService service) : ControllerBase
         if (isActive) await service.ActivateAsync(id, updatedBy, ct);
         else await service.DeactivateAsync(id, updatedBy, ct);
         return NoContent();
+    }
+
+    [HttpPost("login")]
+    [AllowAnonymous]
+    [SwaggerOperation(Summary = "Autentica um cliente", Description = "Realiza login e retorna um token JWT")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(401)]
+    public async Task<IActionResult> Login([FromBody] UserLoginDto dto, [FromServices] JwtTokenService jwtService)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var user = await service.GetEmailAsync(dto.Email);
+        if (user == null)
+            return Unauthorized("Email inválido");
+
+        var valid = AuthHelper.VerifyPasswordHash(dto.Password, user.PasswordHash, user.PasswordSalt);
+        if (!valid)
+            return Unauthorized("Senha inválida");
+
+        var token = jwtService.GenerateToken(user);
+        return Ok(new { user.Id, token });
     }
 }
