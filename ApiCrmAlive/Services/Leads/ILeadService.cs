@@ -17,5 +17,5 @@ public interface ILeadService
     Task<LeadDto?> UpdateStatusAsync(Guid id, LeadStatusEnum status, Guid userId, CancellationToken ct);
     Task<bool> ConvertAsync(Guid leadId, Guid userId, CancellationToken ct = default);
     Task<LeadDto?> GetByPhoneAsync(string phone);
-    Task CreateFromWhatsappAsync(WhatsappMessageDto message);
+    Task<LeadDto> CreateFromWhatsappAsync(WhatsappMessageDto message);
 }

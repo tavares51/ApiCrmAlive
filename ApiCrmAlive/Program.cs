@@ -1,27 +1,28 @@
-﻿using ApiCrmAlive.Services.Users;
-using ApiCrmAlive.Context;
-using ApiCrmAlive.Repositories.Users;
-using ApiCrmAlive.Repositories;
-using ApiCrmAlive.Services;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.OpenApi.Models;
-using DotNetEnv;
-using ApiCrmAlive.Services.Customers;
-using ApiCrmAlive.Repositories.Customers;
+﻿using ApiCrmAlive.Context;
 using ApiCrmAlive.Mappers.Vehicles;
-using ApiCrmAlive.Services.Vehicles;
-using ApiCrmAlive.Repositories.Vehicles;
-using ApiCrmAlive.Utils;
+using ApiCrmAlive.Repositories;
+using ApiCrmAlive.Repositories.Customers;
 using ApiCrmAlive.Repositories.Leads;
-using ApiCrmAlive.Services.Leads;
-using ApiCrmAlive.Services.Sales;
-using ApiCrmAlive.Repositories.Sales;
-using ApiCrmAlive.Services.Marketplaces;
 using ApiCrmAlive.Repositories.Marketplaces;
-using Microsoft.IdentityModel.Tokens;
-using ApiCrmAlive.Services.Marketplaces.MercadoLivre;
+using ApiCrmAlive.Repositories.Sales;
+using ApiCrmAlive.Repositories.Users;
+using ApiCrmAlive.Repositories.Vehicles;
+using ApiCrmAlive.Services;
+using ApiCrmAlive.Services.Customers;
+using ApiCrmAlive.Services.Integrations;
 using ApiCrmAlive.Services.JWT;
+using ApiCrmAlive.Services.Leads;
+using ApiCrmAlive.Services.Marketplaces;
+using ApiCrmAlive.Services.Marketplaces.MercadoLivre;
+using ApiCrmAlive.Services.Sales;
+using ApiCrmAlive.Services.Users;
+using ApiCrmAlive.Services.Vehicles;
+using ApiCrmAlive.Utils;
+using DotNetEnv;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -106,6 +107,22 @@ builder.Services.AddScoped<IMarketplaceRepository, MarketplaceRepository>();
 
 builder.Services.AddScoped<IMarketplaceConfigurationService, MarketplaceConfigurationService>();
 builder.Services.AddScoped<IMarketplaceService, MarketplaceService>();
+
+// Registro do serviço de integração com Evolution WhatsApp
+builder.Services.AddHttpClient<IEvolutionWhatsappService, EvolutionWhatsappService>(client =>
+{
+    // Preferir configuração em appsettings: "Evolution:BaseUrl" e "Evolution:ApiKey"
+    var baseUrl = builder.Configuration["Evolution:BaseUrl"] ?? Environment.GetEnvironmentVariable("EVOLUTION_BASE_URL") ?? "https://api.evolution.example/";
+    client.BaseAddress = new Uri(baseUrl);
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+
+    var apiKey = builder.Configuration["Evolution:ApiKey"] ?? Environment.GetEnvironmentVariable("EVOLUTION_API_KEY");
+    if (!string.IsNullOrWhiteSpace(apiKey))
+    {
+        // ex.: token bearer
+        client.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
+    }
+});
 
 builder.Services.AddSingleton<VehicleMapper>();
 builder.Services.AddSingleton<SupabaseFileUploader>();

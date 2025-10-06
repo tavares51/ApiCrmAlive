@@ -132,7 +132,7 @@ public class LeadService(ILeadRepository repo, IUnitOfWork uow) : ILeadService
         return lead == null ? null : LeadMapper.ToDto(lead);
     }
 
-    public async Task CreateFromWhatsappAsync(WhatsappMessageDto message)
+    public async Task<LeadDto> CreateFromWhatsappAsync(WhatsappMessageDto message)
     {
         var dto = new LeadCreateDto(
             message.ContactName ?? string.Empty,
@@ -146,6 +146,7 @@ public class LeadService(ILeadRepository repo, IUnitOfWork uow) : ILeadService
             false,
             message.Message
         );
-        await CreateAsync(dto, Guid.Empty); // ou passe o userId correto
+        var created = await CreateAsync(dto, Guid.Empty);
+        return created;
     }
 }
