@@ -1,4 +1,5 @@
-﻿using ApiCrmAlive.DTOs.Leads;
+﻿using ApiCrmAlive.DTOs.Integrations;
+using ApiCrmAlive.DTOs.Leads;
 using ApiCrmAlive.Utils;
 
 namespace ApiCrmAlive.Services.Leads;
@@ -15,4 +16,6 @@ public interface ILeadService
     Task<IReadOnlyList<LeadInteractionDto>> GetInteractionsAsync(Guid leadId, CancellationToken ct = default);
     Task<LeadDto?> UpdateStatusAsync(Guid id, LeadStatusEnum status, Guid userId, CancellationToken ct);
     Task<bool> ConvertAsync(Guid leadId, Guid userId, CancellationToken ct = default);
+    Task<LeadDto?> GetByPhoneAsync(string phone);
+    Task CreateFromWhatsappAsync(WhatsappMessageDto message);
 }

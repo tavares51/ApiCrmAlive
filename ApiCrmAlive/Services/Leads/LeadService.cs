@@ -1,4 +1,5 @@
-﻿using ApiCrmAlive.DTOs.Leads;
+﻿using ApiCrmAlive.DTOs.Integrations;
+using ApiCrmAlive.DTOs.Leads;
 using ApiCrmAlive.Mappers.Leads;
 using ApiCrmAlive.Repositories.Leads;
 using ApiCrmAlive.Utils;
@@ -123,5 +124,28 @@ public class LeadService(ILeadRepository repo, IUnitOfWork uow) : ILeadService
         await _uow.SaveChangesAsync(ct);
 
         return LeadMapper.ToDto(e);
+    }
+
+    public async Task<LeadDto?> GetByPhoneAsync(string phone)
+    {
+        var lead = await _repo.Query().FirstOrDefaultAsync(l => l.Phone == phone);
+        return lead == null ? null : LeadMapper.ToDto(lead);
+    }
+
+    public async Task CreateFromWhatsappAsync(WhatsappMessageDto message)
+    {
+        var dto = new LeadCreateDto(
+            message.ContactName ?? string.Empty,
+            message.ContactPhone ?? string.Empty,
+            null,
+            "WhatsApp",
+            null,
+            null,
+            null,
+            null,
+            false,
+            message.Message
+        );
+        await CreateAsync(dto, Guid.Empty); // ou passe o userId correto
     }
 }
