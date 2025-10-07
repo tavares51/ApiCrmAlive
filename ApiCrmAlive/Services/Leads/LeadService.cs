@@ -1,16 +1,19 @@
 ﻿using ApiCrmAlive.DTOs.Integrations;
 using ApiCrmAlive.DTOs.Leads;
 using ApiCrmAlive.Mappers.Leads;
+using ApiCrmAlive.Models;
 using ApiCrmAlive.Repositories.Leads;
+using ApiCrmAlive.Services.Integrations;
 using ApiCrmAlive.Utils;
 using Microsoft.EntityFrameworkCore;
 
 namespace ApiCrmAlive.Services.Leads;
 
-public class LeadService(ILeadRepository repo, IUnitOfWork uow) : ILeadService
+public class LeadService(ILeadRepository repo, IUnitOfWork uow, IEvolutionWhatsappService whatsappService) : ILeadService
 {
     private readonly ILeadRepository _repo = repo;
     private readonly IUnitOfWork _uow = uow;
+    private readonly IEvolutionWhatsappService _whatsappService = whatsappService;
 
     public async Task<LeadInteractionDto> AddInteractionAsync(Guid leadId, LeadInteractionCreateDto dto, Guid userId, CancellationToken ct = default)
     {
@@ -135,7 +138,7 @@ public class LeadService(ILeadRepository repo, IUnitOfWork uow) : ILeadService
     public async Task<LeadDto> CreateFromWhatsappAsync(WhatsappMessageDto message)
     {
         var dto = new LeadCreateDto(
-            message.ContactName ?? string.Empty,
+            message.ContactName ?? "Contato WhatsApp",
             message.ContactPhone ?? string.Empty,
             null,
             "WhatsApp",
@@ -146,7 +149,22 @@ public class LeadService(ILeadRepository repo, IUnitOfWork uow) : ILeadService
             false,
             message.Message
         );
-        var created = await CreateAsync(dto, Guid.Empty);
-        return created;
+
+        // Cria o lead
+        var createdLead = await CreateAsync(dto, Guid.Empty);
+
+        // Envia mensagem de saudação
+        var greetingMessage = $"Olá {createdLead.Name}, obrigado por entrar em contato! Em breve retornaremos.";
+        try
+        {
+            await _whatsappService.SendTextMessageAsync(createdLead.Phone, greetingMessage);
+        }
+        catch (Exception ex)
+        {
+            // Loga o erro, mas não impede o fluxo principal
+            Console.WriteLine($"Erro ao enviar mensagem de saudação: {ex.Message}");
+        }
+
+        return createdLead;
     }
 }

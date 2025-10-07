@@ -7,7 +7,7 @@ public record LeadCreateDto(
     string Source,
     Guid? VehicleInterestId,
     string? VehicleInterestDescription,
-    decimal? BudgetMin,
+    decimal? BudgetMin, 
     decimal? BudgetMax,
     bool FinancingNeeded,
     string? Notes

@@ -97,7 +97,7 @@ builder.Services.AddScoped<JwtTokenService>();
 
 builder.Services.AddHttpClient<IMercadoLivreAuthService, MercadoLivreAuthService>(client =>
 {
-    client.BaseAddress = new Uri("https://api.mercadolibre.com/");
+    client.BaseAddress = new Uri("https://api.mercadolivre.com/");
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
 
@@ -111,17 +111,11 @@ builder.Services.AddScoped<IMarketplaceService, MarketplaceService>();
 // Registro do serviço de integração com Evolution WhatsApp
 builder.Services.AddHttpClient<IEvolutionWhatsappService, EvolutionWhatsappService>(client =>
 {
-    // Preferir configuração em appsettings: "Evolution:BaseUrl" e "Evolution:ApiKey"
-    var baseUrl = builder.Configuration["Evolution:BaseUrl"] ?? Environment.GetEnvironmentVariable("EVOLUTION_BASE_URL") ?? "https://api.evolution.example/";
-    client.BaseAddress = new Uri(baseUrl);
-    client.DefaultRequestHeaders.Add("Accept", "application/json");
-
-    var apiKey = builder.Configuration["Evolution:ApiKey"] ?? Environment.GetEnvironmentVariable("EVOLUTION_API_KEY");
-    if (!string.IsNullOrWhiteSpace(apiKey))
-    {
-        // ex.: token bearer
-        client.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
-    }
+    var evolutionBaseUrl = builder.Configuration["Evolution:BaseUrl"];
+    if (string.IsNullOrWhiteSpace(evolutionBaseUrl))
+        throw new InvalidOperationException("Evolution:BaseUrl não está configurado.");
+    client.BaseAddress = new Uri(evolutionBaseUrl);
+    client.DefaultRequestHeaders.Add("apikey", builder.Configuration["Evolution:ApiKey"]);
 });
 
 builder.Services.AddSingleton<VehicleMapper>();
