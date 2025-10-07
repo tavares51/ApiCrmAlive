@@ -19,7 +19,7 @@ public class EvolutionWhatsappService(HttpClient http, ILogger<EvolutionWhatsapp
             return;
         }
 
-        // Normaliza o telefone para conter apenas dígitos (E.164 sem '+')
+        // Normaliza o telefone para o formato E.164
         var to = NormalizePhone(toPhone);
         if (string.IsNullOrWhiteSpace(to))
         {
@@ -63,6 +63,6 @@ public class EvolutionWhatsappService(HttpClient http, ILogger<EvolutionWhatsapp
     {
         if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
         var digits = new string(raw.Where(char.IsDigit).ToArray());
-        return digits;
+        return digits.StartsWith("55") ? $"+{digits}" : $"+55{digits}";
     }
 }
