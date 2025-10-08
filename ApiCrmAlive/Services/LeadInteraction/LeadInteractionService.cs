@@ -14,10 +14,7 @@ public class LeadInteractionService(ILeadInteractionRepository repo, IUnitOfWork
 
     public async Task<LeadInteractionDto> CreateAsync(LeadInteractionDto dto, Guid updatedBy, CancellationToken ct = default)
     {
-        var entity = LeadInteractionMapper.FromDto(dto.LeadId, dto, updatedBy);
-        await _repo.AddAsync(entity, ct);
-        await _uow.SaveChangesAsync(ct);
-        return LeadInteractionMapper.ToDto(entity);
+        throw new NotImplementedException();
     }
 
     public Task DeleteAsync(Guid id, CancellationToken ct = default)
