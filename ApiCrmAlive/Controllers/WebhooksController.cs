@@ -11,21 +11,32 @@ public class WebhooksController(ILeadService leadService) : ControllerBase
     private readonly ILeadService _leadService = leadService;
 
     [HttpPost("whatsapp")]
-    public async Task<IActionResult> ReceiveWhatsappMessage([FromBody] WhatsappMessageDto message)
+    public async Task<IActionResult> ReceiveWhatsappMessage([FromBody] EvolutionWebhookPayload evoPayload)
     {
-        if (message == null || string.IsNullOrWhiteSpace(message.ContactPhone))
-            return BadRequest("Mensagem inválida.");
+        if (evoPayload == null || evoPayload.Key?.RemoteJid == null)
+            return BadRequest("Payload inválido");
 
-        // Verifica se o lead já existe pelo telefone
-        var existingLead = await _leadService.GetByPhoneAsync(message.ContactPhone);
-        if (existingLead != null)
+        string phone = evoPayload.Key.RemoteJid; // ex: "5515998115496@s.whatsapp.net"
+                                                 // Opcional: remover sufixo “@s.whatsapp.net”
+        phone = phone.Split('@')[0];
+
+        string name = evoPayload.PushName!;
+        string message = evoPayload.Message?.Conversation!;
+
+        // mapping para seu DTO
+        var whatsappDto = new WhatsappMessageDto
         {
-            return Ok("Lead já existente. Nenhuma ação necessária.");
-        }
+            ContactPhone = phone,
+            ContactName = name,
+            Message = message
+        };
 
-        // Cria um novo lead com base na mensagem recebida
-        await _leadService.CreateFromWhatsappAsync(message);
+        // resto do seu fluxo
+        var existingLead = await _leadService.GetByPhoneAsync(whatsappDto.ContactPhone);
+        if (existingLead != null)
+            return Ok("Lead já existente.");
 
+        await _leadService.CreateFromWhatsappAsync(whatsappDto);
         return Ok("Lead criada com sucesso.");
     }
 }
