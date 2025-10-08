@@ -3,6 +3,7 @@ using ApiCrmAlive.Mappers.Vehicles;
 using ApiCrmAlive.Repositories;
 using ApiCrmAlive.Repositories.Customers;
 using ApiCrmAlive.Repositories.Leads;
+using ApiCrmAlive.Repositories.LeadsInterations;
 using ApiCrmAlive.Repositories.Marketplaces;
 using ApiCrmAlive.Repositories.Sales;
 using ApiCrmAlive.Repositories.Users;
@@ -11,6 +12,7 @@ using ApiCrmAlive.Services;
 using ApiCrmAlive.Services.Customers;
 using ApiCrmAlive.Services.Integrations;
 using ApiCrmAlive.Services.JWT;
+using ApiCrmAlive.Services.LeadInteraction;
 using ApiCrmAlive.Services.Leads;
 using ApiCrmAlive.Services.Marketplaces;
 using ApiCrmAlive.Services.Marketplaces.MercadoLivre;
@@ -93,6 +95,9 @@ builder.Services.AddScoped<ILeadService, LeadService>();
 builder.Services.AddScoped<ILeadRepository, LeadRepository>();
 builder.Services.AddScoped<ISaleRepository, SaleRepository>();
 builder.Services.AddScoped<ISaleService, SaleService>();
+builder.Services.AddScoped<ILeadInteractionService, LeadInteractionService>();
+builder.Services.AddScoped<ILeadInteractionRepository, LeadInteractionRepository>();
+
 builder.Services.AddScoped<JwtTokenService>();
 
 builder.Services.AddHttpClient<IMercadoLivreAuthService, MercadoLivreAuthService>(client =>
@@ -193,7 +198,7 @@ app.UseSwaggerUI(c =>
 
 app.UseCors("AllowAll");
 
-app.UseHttpsRedirection();
+//app.UseHttpsRedirection();
 app.UseAuthorization();
 
 app.MapControllers();
