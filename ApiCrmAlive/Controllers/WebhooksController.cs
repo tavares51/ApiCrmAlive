@@ -1,116 +1,106 @@
+using System.IO;
+using System.Text;
+using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using ApiCrmAlive.DTOs.Integrations;
 using ApiCrmAlive.Services.Leads;
-using Microsoft.AspNetCore.Mvc;
-using System.Text.Json;
+using ApiCrmAlive.Services.LeadInteraction;
 
-namespace ApiCrmAlive.Controllers
+[ApiController]
+[Route("api/webhooks")]
+public class WebhooksController : ControllerBase
 {
-    [ApiController]
-    [Route("api/[controller]")]
-    public class WhatsappController(ILeadService leadService, ILogger<WhatsappController> logger) : ControllerBase
+    private readonly ILeadService _leadService;
+    private readonly ILeadInteractionService _leadInteractionService;
+
+    public WebhooksController(ILeadService leadService, ILeadInteractionService leadInteractionService)
     {
-        [HttpPost("receive-message")]
-        public async Task<IActionResult> ReceiveWhatsappMessage([FromBody] JsonElement body)
+        _leadService = leadService;
+        _leadInteractionService = leadInteractionService;
+    }
+
+    [HttpPost("whatsapp")]
+    public async Task<IActionResult> ReceiveWhatsappMessage()
+    {
+        string rawBody;
+        using (var reader = new StreamReader(Request.Body, Encoding.UTF8))
         {
-            try
-            {
-                logger.LogInformation("Webhook recebido da Evolution API: {@Body}", body);
-
-                // Verifica se é o evento correto
-                if (!body.TryGetProperty("event", out var eventProp) ||
-                    eventProp.GetString() != "MESSAGES_UPSERT")
-                {
-                    logger.LogWarning("Evento não é MESSAGES_UPSERT: {Event}", eventProp.GetString());
-                    return Ok("Evento ignorado.");
-                }
-
-                // Acessa data.messages (array de mensagens)
-                if (!body.TryGetProperty("data", out var data) ||
-                    !data.TryGetProperty("messages", out var messagesProp) ||
-                    messagesProp.ValueKind != JsonValueKind.Array)
-                {
-                    logger.LogWarning("Payload inválido: sem 'data.messages'.");
-                    return BadRequest("Payload inválido.");
-                }
-
-                // Processa cada mensagem (geralmente uma, mas pode ser múltipla)
-                foreach (var messageObj in messagesProp.EnumerateArray())
-                {
-                    // Ignora mensagens enviadas por você (fromMe: true)
-                    if (messageObj.TryGetProperty("key", out var key) &&
-                        key.TryGetProperty("fromMe", out var fromMe) &&
-                        fromMe.GetBoolean())
-                    {
-                        logger.LogInformation("Ignorando mensagem enviada por mim.");
-                        continue;
-                    }
-
-                    // Extrai telefone (remove @s.whatsapp.net)
-                    string phone = key.GetProperty("remoteJid").GetString()!;
-                    phone = phone.Split('@')[0]; // Ex: 5511999999999
-
-                    // Nome do contato
-                    string name = messageObj.TryGetProperty("pushName", out var pushName)
-                        ? pushName.GetString() ?? "Desconhecido"
-                        : "Desconhecido";
-
-                    // Extrai texto da mensagem (fallback para tipos comuns)
-                    string message = ExtractMessageText(messageObj);
-
-                    var whatsappDto = new WhatsappMessageDto
-                    {
-                        ContactPhone = phone,
-                        ContactName = name,
-                        Message = message
-                    };
-
-                    logger.LogInformation("Processando lead: {Phone} - {Name} - {Message}", phone, name, message);
-
-                    // Verifica lead existente
-                    var existingLead = await leadService.GetByPhoneAsync(whatsappDto.ContactPhone);
-                    if (existingLead != null)
-                    {
-                        logger.LogInformation("Lead já existente para {Phone}", phone);
-                        return Ok("Lead já existente.");
-                    }
-
-                    // Cria novo lead
-                    await leadService.CreateFromWhatsappAsync(whatsappDto);
-                    logger.LogInformation("Lead criado com sucesso para {Phone}", phone);
-                }
-
-                return Ok("Mensagens processadas com sucesso.");
-            }
-            catch (JsonException jsonEx)
-            {
-                logger.LogError(jsonEx, "Erro ao parsear JSON do webhook.");
-                return BadRequest($"Erro no JSON: {jsonEx.Message}");
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Erro ao processar webhook.");
-                return StatusCode(500, $"Erro interno: {ex.Message}");
-            }
+            rawBody = await reader.ReadToEndAsync();
         }
 
-        // Método auxiliar para extrair texto de diferentes tipos de mensagem
-        private static string ExtractMessageText(JsonElement messageObj)
+        // Log bruto para inspeção
+        Console.WriteLine("RAW Webhook Body: " + rawBody);
+
+        JArray array;
+        try
         {
-            if (!messageObj.TryGetProperty("message", out var msgContent))
-                return string.Empty;
+            array = JArray.Parse(rawBody);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Erro ao parsear como array: " + ex);
+            return BadRequest("JSON não é um array: " + ex.Message);
+        }
 
-            // Texto simples
-            if (msgContent.TryGetProperty("conversation", out var conv))
-                return conv.GetString() ?? string.Empty;
+        if (array.Count == 0)
+        {
+            return BadRequest("Array de payload vazio");
+        }
 
-            // Texto estendido (com formatação, links etc.)
-            if (msgContent.TryGetProperty("extendedTextMessage", out var ext) &&
-                ext.TryGetProperty("text", out var text))
-                return text.GetString() ?? string.Empty;
+        // Pega o primeiro elemento do array
+        JObject wrapper = (JObject)array[0];
 
-            // Para outros tipos (imagem, áudio etc.), retorne um placeholder ou ignore
-            // Ex: if (msgContent.TryGetProperty("imageMessage", out _)) return "[Imagem recebida]";
-            return "[Tipo de mensagem não suportado]";
+        // Dentro dele, procurar "body"
+        if (!wrapper.TryGetValue("body", out JToken bodyToken))
+        {
+            return BadRequest("Não achei propriedade 'body' no wrapper");
+        }
+
+        JObject body = (JObject)bodyToken;
+
+        // Dentro de body, procurar "data"
+        if (!body.TryGetValue("data", out JToken dataToken))
+        {
+            return BadRequest("Não achei propriedade 'data' no body");
+        }
+
+        JObject data = (JObject)dataToken;
+
+        // Agora extrair os campos desejados
+        string remoteJid = data.SelectToken("key.remoteJid")?.ToString();
+        if (remoteJid == null)
+        {
+            return BadRequest("remoteJid não encontrado");
+        }
+        string phone = remoteJid.Split('@')[0];
+
+        string pushName = data.SelectToken("pushName")?.ToString();
+        string message = data.SelectToken("message.conversation")?.ToString();
+
+        // Crie seu DTO
+        var whatsappDto = new WhatsappMessageDto
+        {
+            ContactPhone = phone,
+            ContactName = pushName,
+            Message = message
+        };
+
+        try
+        {
+            var existing = await _leadService.GetByPhoneAsync(whatsappDto.ContactPhone);
+            if (existing != null)
+            {
+                return Ok("Lead já existente.");
+            }
+
+            await _leadService.CreateFromWhatsappAsync(whatsappDto);
+            return Ok("Lead criada com sucesso.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Erro interno: " + ex);
+            return StatusCode(500, "Erro interno: " + ex.Message);
         }
     }
 }
