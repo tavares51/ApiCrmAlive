@@ -98,6 +98,9 @@ public class VehicleMapper()
         if (!string.IsNullOrWhiteSpace(dto.Plate)) v.Plate = NormalizePlate(dto.Plate);
         if (!string.IsNullOrWhiteSpace(dto.Color)) v.Color = dto.Color.Trim();
 
+        if (dto.Fuel.HasValue) v.Fuel = dto.Fuel.Value;
+        if (dto.Transmission.HasValue) v.Transmission = dto.Transmission.Value;
+
         if (dto.Mileage.HasValue) v.Mileage = dto.Mileage.Value;
         if (dto.Price.HasValue) v.Price = dto.Price.Value;
         if (dto.CostPrice.HasValue) v.CostPrice = dto.CostPrice;
@@ -111,7 +114,36 @@ public class VehicleMapper()
         if (dto.Features is not null)
             v.Features = [.. dto.Features.Where(NotEmpty).Select(s => s!.Trim())];
 
+        // Photos: prefer Photos, fall back to Images for backwards compatibility.
+        var photos = dto.Photos ?? dto.Images;
+        if (photos is not null)
+            v.Photos = [.. photos.Where(NotEmpty).Select(s => s!.Trim())];
+
         if (dto.PreviousOwnerId.HasValue) v.PreviousOwnerId = dto.PreviousOwnerId;
+
+        if (dto.YearModel.HasValue) v.YearModel = dto.YearModel.Value;
+
+        if (dto.State is not null) v.State = string.IsNullOrWhiteSpace(dto.State) ? null : dto.State.Trim();
+        if (dto.ColorIntern is not null) v.ColorIntern = string.IsNullOrWhiteSpace(dto.ColorIntern) ? null : dto.ColorIntern.Trim();
+        if (dto.Power is not null) v.Power = string.IsNullOrWhiteSpace(dto.Power) ? null : dto.Power.Trim();
+
+        if (dto.Doors.HasValue) v.Doors = dto.Doors.Value;
+        if (dto.Seats.HasValue) v.Seats = dto.Seats.Value;
+        if (dto.Speed.HasValue) v.Speed = dto.Speed.Value;
+        if (dto.Engine.HasValue) v.Engine = dto.Engine.Value;
+
+        if (dto.ApprovedInjunction.HasValue) v.ApprovedInjunction = dto.ApprovedInjunction.Value;
+        if (dto.DescInjuntion is not null) v.DescInjuntion = string.IsNullOrWhiteSpace(dto.DescInjuntion) ? null : dto.DescInjuntion.Trim();
+
+        if (dto.Chassis is not null) v.Chassis = string.IsNullOrWhiteSpace(dto.Chassis) ? null : dto.Chassis.Trim();
+
+        if (dto.Steering.HasValue) v.Steering = dto.Steering.Value;
+        if (dto.Category.HasValue) v.Category = dto.Category.Value;
+
+        if (dto.EntryMileage.HasValue) v.EntryMileage = dto.EntryMileage.Value;
+        if (dto.Renavam is not null) v.Renavam = string.IsNullOrWhiteSpace(dto.Renavam) ? null : dto.Renavam.Trim();
+        if (dto.ModelDesc is not null) v.ModelDesc = string.IsNullOrWhiteSpace(dto.ModelDesc) ? null : dto.ModelDesc.Trim();
+        if (dto.Version is not null) v.Version = string.IsNullOrWhiteSpace(dto.Version) ? null : dto.Version.Trim();
 
         v.UpdatedAt = DateTime.UtcNow;
         v.UpdatedBy = updatedBy;

@@ -124,7 +124,8 @@ builder.Services.AddHttpClient<IEvolutionWhatsappService, EvolutionWhatsappServi
 });
 
 builder.Services.AddSingleton<VehicleMapper>();
-builder.Services.AddSingleton<SupabaseFileUploader>();
+builder.Services.Configure<MinioOptions>(builder.Configuration.GetSection("Minio"));
+builder.Services.AddSingleton<IFileUploader, MinioFileUploader>();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -188,6 +189,26 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
+if (string.Equals(Environment.GetEnvironmentVariable("APPLY_MIGRATIONS"), "true", StringComparison.OrdinalIgnoreCase))
+{
+    // For local/dev containers: apply migrations automatically, with a small retry window while db is starting.
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+    for (var attempt = 1; attempt <= 10; attempt++)
+    {
+        try
+        {
+            db.Database.Migrate();
+            break;
+        }
+        catch when (attempt < 10)
+        {
+            Thread.Sleep(TimeSpan.FromSeconds(2));
+        }
+    }
+}
 
 app.UseSwagger();
 app.UseSwaggerUI(c =>

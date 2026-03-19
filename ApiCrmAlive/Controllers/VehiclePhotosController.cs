@@ -7,10 +7,10 @@ namespace ApiCrmAlive.Controllers
 {
     [ApiController]
     [Route("api")]
-    public class VehiclePhotosController(IVehicleService service, SupabaseFileUploader uploader) : ControllerBase
+    public class VehiclePhotosController(IVehicleService service, IFileUploader uploader) : ControllerBase
     {
         private readonly IVehicleService _service = service;
-        private readonly SupabaseFileUploader _uploader = uploader;
+        private readonly IFileUploader _uploader = uploader;
 
         [HttpPost("veiculo/{id}/fotos")]
         [SwaggerOperation(
@@ -28,7 +28,7 @@ namespace ApiCrmAlive.Controllers
             if (photos == null || !photos.Any(p => p.Length > 0))
                 return BadRequest("Nenhuma foto válida foi enviada.");
 
-            var newUrls = await UploadPhotosToSupabase(photos);
+            var newUrls = await UploadPhotos(photos);
             if (newUrls.Count == 0)
                 return BadRequest("Nenhuma foto foi adicionada com sucesso.");
 
@@ -72,7 +72,7 @@ namespace ApiCrmAlive.Controllers
             return Ok(photos);
         }
 
-        private async Task<List<string>> UploadPhotosToSupabase(List<IFormFile> files)
+        private async Task<List<string>> UploadPhotos(List<IFormFile> files)
         {
             return await _uploader.UploadAsync(files);
         }

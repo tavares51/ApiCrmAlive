@@ -1,0 +1,82 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: apicrmalive-db
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5435:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  minio:
+    image: quay.io/minio/minio:latest
+    container_name: apicrmalive-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+
+  minio-init:
+    image: quay.io/minio/mc:latest
+    container_name: apicrmalive-minio-init
+    depends_on:
+      - minio
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        i=0
+        until mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"; do
+          i=$((i+1))
+          if [ "$$i" -ge 30 ]; then
+            echo "MinIO nao respondeu a tempo" >&2
+            exit 1
+          fi
+          sleep 1
+        done
+        mc mb -p "local/$${MINIO_BUCKET}" || true
+        mc anonymous set download "local/$${MINIO_BUCKET}"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_BUCKET: vehicles
+
+  api:
+    build:
+      context: .
+      dockerfile: ApiCrmAlive/Dockerfile
+    container_name: apicrmalive-api
+    depends_on:
+      - db
+      - minio
+      - minio-init
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      APPLY_MIGRATIONS: "true"
+
+      ConnectionStrings__DefaultConnection: Host=db;Port=5432;Database=postgres;Username=postgres;Password=postgres;Ssl Mode=Disable;Trust Server Certificate=true
+
+      Minio__Endpoint: http://minio:9000
+      Minio__PublicBaseUrl: http://localhost:9000
+      Minio__AccessKey: minioadmin
+      Minio__SecretKey: minioadmin
+      Minio__Bucket: vehicles
+      Minio__UseSsl: "false"
+      Minio__UsePresignedGetUrls: "false"
+      Minio__CreateBucketIfMissing: "false"
+    ports:
+      - "5214:8080"
+
+volumes:
+  pgdata:
+  minio-data:

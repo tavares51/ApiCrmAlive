@@ -70,7 +70,8 @@ public class Vehicle
 
     public int EntryMileage { get; set; }
 
-    public int? Renavam { get; set; }
+    [MaxLength(11)]
+    public string? Renavam { get; set; }
 
     [Required]
     public decimal Price { get; set; }

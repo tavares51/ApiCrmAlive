@@ -123,6 +123,81 @@ public class VehicleService(IVehicleRepository repo, IUnitOfWork uow, VehicleMap
         return _mapper.ToDto(v);
     }
 
+    public async Task<VehicleDto> UpdateAsync(Guid id, VehiclePutDto dto, Guid updatedBy, CancellationToken ct = default)
+    {
+        var v = await _repo.GetByIdAsync(id, ct) ?? throw new KeyNotFoundException("Veículo não encontrado.");
+
+        // Se placa enviada e mudou, valida unicidade
+        if (!string.IsNullOrWhiteSpace(dto.Plate))
+        {
+            var newPlate = dto.Plate.Trim().ToUpperInvariant();
+            if (!string.Equals(newPlate, v.Plate, StringComparison.OrdinalIgnoreCase) &&
+                await _repo.PlateExistsAsync(newPlate, ct))
+                throw new InvalidOperationException("Placa já cadastrada para outro veículo.");
+        }
+
+        v.Make = dto.Make;
+        v.Model = dto.Model;
+        v.Year = dto.Year;
+        v.Price = dto.Price;
+        v.Plate = dto.Plate.Trim().ToUpperInvariant();
+        v.Color = dto.Color;
+        v.Status = dto.Status;
+        v.UpdatedAt = DateTime.UtcNow;
+        v.UpdatedBy = updatedBy;
+        v.PhotosJson = JsonSerializer.Serialize(dto.Photos ?? []);
+        v.Fuel = dto.Fuel;
+        v.Transmission = dto.Transmission;
+        v.Mileage = dto.Mileage;
+        v.CostPrice = dto.CostPrice;
+        v.EntryDate = dto.EntryDate;
+        v.Description = dto.Description;
+        v.Features = dto.Features;
+        v.YearModel = dto.YearModel;
+        v.State = dto.State;
+        v.ColorIntern = dto.ColorIntern;
+        v.Power = dto.Power;
+        v.Doors = dto.Doors;
+        v.Seats = dto.Seats;
+        v.Speed = dto.Speed;
+        v.Engine = dto.Engine;
+        v.ApprovedInjunction = dto.ApprovedInjunction;
+        v.DescInjuntion = dto.DescInjuntion;
+        v.Chassis = dto.Chassis;
+        v.Steering = dto.Steering;
+        v.Category = dto.Category;
+        v.EntryMileage = dto.EntryMileage;
+        v.Renavam = dto.Renavam;
+        v.ModelDesc = dto.ModelDesc;
+        v.PreviousOwnerId = dto.PreviousOwnerId;
+        v.Version = dto.Version;
+
+        _repo.Update(v);
+        await _uow.SaveChangesAsync(ct);
+
+        return _mapper.ToDto(v);
+    }
+
+    public async Task<VehicleDto> PatchAsync(Guid id, VehicleUpdateDto dto, Guid updatedBy, CancellationToken ct = default)
+    {
+        var v = await _repo.GetByIdAsync(id, ct) ?? throw new KeyNotFoundException("Veículo não encontrado.");
+
+        if (!string.IsNullOrWhiteSpace(dto.Plate))
+        {
+            var newPlate = dto.Plate.Trim().ToUpperInvariant();
+            if (!string.Equals(newPlate, v.Plate, StringComparison.OrdinalIgnoreCase) &&
+                await _repo.PlateExistsAsync(newPlate, ct))
+                throw new InvalidOperationException("Placa já cadastrada para outro veículo.");
+        }
+
+        _mapper.ApplyUpdate(v, dto, updatedBy);
+
+        _repo.Update(v);
+        await _uow.SaveChangesAsync(ct);
+
+        return _mapper.ToDto(v);
+    }
+
     public async Task UpdateStatusAsync(Guid id, VehicleStatusEnum status, Guid updatedBy, CancellationToken ct = default)
     {
         var v = await _repo.GetByIdAsync(id, ct) ?? throw new KeyNotFoundException("Veículo não encontrado.");

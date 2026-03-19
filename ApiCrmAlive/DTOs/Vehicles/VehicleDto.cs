@@ -62,7 +62,8 @@ public class VehicleDto
 
     public int EntryMileage { get; set; }
 
-    public int? Renavam { get; set; }
+    [MaxLength(11)]
+    public string? Renavam { get; set; }
 
     public string? ModelDesc { get; set; }
 

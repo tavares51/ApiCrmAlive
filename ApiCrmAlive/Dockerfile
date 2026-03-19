@@ -2,6 +2,7 @@
 
 # Esta fase é usada durante a execução no VS no modo rápido (Padrão para a configuração de Depuração)
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
+ARG APP_UID=app
 USER $APP_UID
 WORKDIR /app
 EXPOSE 8080

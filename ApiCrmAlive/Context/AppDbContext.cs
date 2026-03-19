@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ApiCrmAlive.Context
 {
-    public class AppDbContext(DbContextOptions options) : DbContext(options)
+    public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
     {
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {

@@ -13,7 +13,9 @@ public interface IVehicleService
     Task<VehicleDto> GetByIdAsync(Guid id, CancellationToken ct = default);
     Task<VehicleDto?> GetByPlateAsync(string plate, CancellationToken ct = default);
     Task<VehicleDto> CreateAsync(VehicleCreateDto dto, Guid updatedBy, CancellationToken ct = default);
+    Task<VehicleDto> UpdateAsync(Guid id, VehiclePutDto dto, Guid updatedBy, CancellationToken ct = default);
     Task<VehicleDto> UpdateAsync(Guid id, VehicleDto dto, Guid updatedBy, CancellationToken ct = default);
+    Task<VehicleDto> PatchAsync(Guid id, VehicleUpdateDto dto, Guid updatedBy, CancellationToken ct = default);
     Task UpdateStatusAsync(Guid id, VehicleStatusEnum status, Guid updatedBy, CancellationToken ct = default);
     Task DeleteAsync(Guid id, CancellationToken ct = default);
     Task<List<string>> GetPhotosAsync(Guid id, CancellationToken ct = default);

@@ -1,7 +1,9 @@
 ﻿using ApiCrmAlive.DTOs.Vehicles;
+using ApiCrmAlive.Repositories.Customers;
 using ApiCrmAlive.Utils;
 using ApiCrmAlive.Services.Vehicles;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Swashbuckle.AspNetCore.Annotations;
 
 namespace ApiCrmAlive.Controllers;
@@ -9,8 +11,10 @@ namespace ApiCrmAlive.Controllers;
 [ApiController]
 [Route("api/vehicles")]
 [Produces("application/json")]
-public class VehiclesController(IVehicleService service) : ControllerBase
+public class VehiclesController(IVehicleService service, ICustomerRepository customers) : ControllerBase
 {
+    private readonly ICustomerRepository _customers = customers;
+
     /// <summary>GET /api/vehicles</summary>
     [HttpGet]
     [SwaggerOperation(Summary = "Lista veículos com filtros")]
@@ -55,6 +59,25 @@ public class VehiclesController(IVehicleService service) : ControllerBase
     [SwaggerResponse(409, "Placa já cadastrada")]
     public async Task<ActionResult<VehicleDto>> Create([FromBody] VehicleCreateDto dto, CancellationToken ct)
     {
+        if (dto.PreviousOwnerId.HasValue)
+        {
+            if (dto.PreviousOwnerId.Value == Guid.Empty)
+            {
+                ModelState.AddModelError(nameof(dto.PreviousOwnerId), "PreviousOwnerId inválido.");
+                return ValidationProblem(ModelState);
+            }
+
+            var exists = await _customers.Query()
+                .AsNoTracking()
+                .AnyAsync(c => c.Id == dto.PreviousOwnerId.Value, ct);
+
+            if (!exists)
+            {
+                ModelState.AddModelError(nameof(dto.PreviousOwnerId), "Cliente informado em PreviousOwnerId não existe.");
+                return ValidationProblem(ModelState);
+            }
+        }
+
         var updatedBy = Guid.NewGuid(); // substitua pelo usuário autenticado
         var created = await service.CreateAsync(dto, updatedBy, ct);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
@@ -66,10 +89,60 @@ public class VehiclesController(IVehicleService service) : ControllerBase
     [SwaggerOperation(Summary = "Atualiza um veículo")]
     [SwaggerResponse(200, "Atualizado", typeof(VehicleDto))]
     [SwaggerResponse(404, "Não encontrado")]
-    public async Task<ActionResult<VehicleDto>> Update(Guid id, [FromBody] VehicleDto dto, CancellationToken ct)
+    public async Task<ActionResult<VehicleDto>> Update(Guid id, [FromBody] VehiclePutDto dto, CancellationToken ct)
     {
+        if (dto.PreviousOwnerId.HasValue)
+        {
+            if (dto.PreviousOwnerId.Value == Guid.Empty)
+            {
+                ModelState.AddModelError(nameof(dto.PreviousOwnerId), "PreviousOwnerId inválido.");
+                return ValidationProblem(ModelState);
+            }
+
+            var exists = await _customers.Query()
+                .AsNoTracking()
+                .AnyAsync(c => c.Id == dto.PreviousOwnerId.Value, ct);
+
+            if (!exists)
+            {
+                ModelState.AddModelError(nameof(dto.PreviousOwnerId), "Cliente informado em PreviousOwnerId não existe.");
+                return ValidationProblem(ModelState);
+            }
+        }
+
         var updatedBy = Guid.NewGuid(); // substitua pelo usuário autenticado
         return Ok(await service.UpdateAsync(id, dto, updatedBy, ct));
+    }
+
+    /// <summary>PATCH /api/vehicles/:id</summary>
+    [HttpPatch("{id:guid}")]
+    [Consumes("application/json")]
+    [SwaggerOperation(Summary = "Atualiza parcialmente um veículo")]
+    [SwaggerResponse(200, "Atualizado", typeof(VehicleDto))]
+    [SwaggerResponse(404, "Não encontrado")]
+    public async Task<ActionResult<VehicleDto>> Patch(Guid id, [FromBody] VehicleUpdateDto dto, CancellationToken ct)
+    {
+        if (dto.PreviousOwnerId.HasValue)
+        {
+            if (dto.PreviousOwnerId.Value == Guid.Empty)
+            {
+                ModelState.AddModelError(nameof(dto.PreviousOwnerId), "PreviousOwnerId inválido.");
+                return ValidationProblem(ModelState);
+            }
+
+            var exists = await _customers.Query()
+                .AsNoTracking()
+                .AnyAsync(c => c.Id == dto.PreviousOwnerId.Value, ct);
+
+            if (!exists)
+            {
+                ModelState.AddModelError(nameof(dto.PreviousOwnerId), "Cliente informado em PreviousOwnerId não existe.");
+                return ValidationProblem(ModelState);
+            }
+        }
+
+        var updatedBy = Guid.NewGuid(); // substitua pelo usuário autenticado
+        return Ok(await service.PatchAsync(id, dto, updatedBy, ct));
     }
 
     /// <summary>PATCH /api/vehicles/:id/status</summary>
