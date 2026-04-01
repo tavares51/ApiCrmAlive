@@ -78,7 +78,7 @@ public class Vehicle
 
     public decimal? CostPrice { get; set; }
 
-    public VehicleStatusEnum Status { get; set; } = VehicleStatusEnum.Disponivel;
+    public VehicleStatusEnum Status { get; set; } = VehicleStatusEnum.Rascunho;
 
     [Required]
     public DateTime EntryDate { get; set; }

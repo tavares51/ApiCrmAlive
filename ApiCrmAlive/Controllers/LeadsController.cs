@@ -1,5 +1,7 @@
 ﻿using ApiCrmAlive.DTOs.Leads;
+using ApiCrmAlive.Context;
 using ApiCrmAlive.Services.Leads;
+using ApiCrmAlive.Utils;
 using Microsoft.AspNetCore.Mvc;
 using Swashbuckle.AspNetCore.Annotations;
 
@@ -8,9 +10,10 @@ namespace ApiCrmAlive.Controllers;
 [ApiController]
 [Route("api/leads")]
 [Produces("application/json")]
-public class LeadsController(ILeadService service) : ControllerBase
+public class LeadsController(ILeadService service, AppDbContext ctx) : ControllerBase
 {
     private readonly ILeadService _service = service;
+    private readonly AppDbContext _ctx = ctx;
 
     [HttpGet]
     [SwaggerOperation(Summary = "Lista todos os leads", Description = "Retorna a lista de leads cadastrados")]
@@ -35,6 +38,17 @@ public class LeadsController(ILeadService service) : ControllerBase
     {
         var userId = Guid.NewGuid(); // TODO: substituir pelo usuário autenticado
         var created = await _service.CreateAsync(dto, userId, ct);
+        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+    }
+
+    [HttpPost("auto")]
+    [SwaggerOperation(Summary = "Cria um lead (com validação + fila de vendedores)", Description = "Verifica duplicidade por telefone e atribui automaticamente um vendedor (round-robin).")]
+    [SwaggerResponse(201, "Lead criado com sucesso", typeof(LeadDto))]
+    [SwaggerResponse(409, "Já existe lead com esse telefone")]
+    public async Task<IActionResult> CreateAuto([FromBody] LeadCreateDto dto, CancellationToken ct)
+    {
+        var userId = Guid.NewGuid(); // TODO: substituir pelo usuário autenticado
+        var created = await _service.CreateAutoAssignAsync(dto, userId, ct);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
 
@@ -68,6 +82,32 @@ public class LeadsController(ILeadService service) : ControllerBase
         var userId = Guid.NewGuid();
         var updated = await _service.UpdateStatusAsync(id, dto.Status, userId, ct);
         return updated is null ? NotFound() : Ok(updated);
+    }
+
+    [HttpPatch("{id:guid}/seller")]
+    [SwaggerOperation(Summary = "Atualiza vendedor do lead", Description = "Altera o vendedor (SellerId) associado a um lead.")]
+    [SwaggerResponse(200, "Vendedor atualizado", typeof(LeadDto))]
+    [SwaggerResponse(404, "Lead ou vendedor não encontrado")]
+    public async Task<IActionResult> UpdateSeller(Guid id, [FromBody] LeadSellerUpdateDto dto, CancellationToken ct)
+    {
+        var userId = Guid.NewGuid(); // TODO: substituir pelo usuário autenticado
+        var updated = await _service.UpdateSellerAsync(id, dto.SellerId, userId, ct);
+        return Ok(updated);
+    }
+
+    [HttpPatch("{id:guid}/lose")]
+    [SwaggerOperation(Summary = "Perde uma lead", Description = "Marca a lead como perdida e associa um ou mais motivos de perda.")]
+    [SwaggerResponse(200, "Lead perdida", typeof(LeadLossResultDto))]
+    [SwaggerResponse(400, "Dados inválidos")]
+    [SwaggerResponse(403, "Sem permissão")]
+    [SwaggerResponse(409, "Motivos inválidos")]
+    public async Task<IActionResult> Lose(Guid id, [FromBody] LeadLoseDto dto, CancellationToken ct)
+    {
+        var userId = User.GetUserIdOrThrow();
+        var companyId = await User.GetCompanyIdOrThrowAsync(_ctx, ct);
+        var role = User.GetRole();
+        var result = await _service.LoseAsync(id, dto.LossReasonIds, dto.LossObservation, companyId, userId, role, ct);
+        return Ok(result);
     }
 
     [HttpGet("kanban")]

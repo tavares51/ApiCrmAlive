@@ -14,7 +14,7 @@ public class SaleDto
     public Guid SellerId { get; set; }
     public string? SellerName { get; set; }
 
-    public Guid LeadId { get; set; }
+    public Guid? LeadId { get; set; }
 
     public DateTime SaleDate { get; set; }
     public decimal SalePrice { get; set; }

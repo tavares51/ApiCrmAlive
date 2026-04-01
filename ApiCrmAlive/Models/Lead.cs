@@ -8,6 +8,9 @@ public class Lead
     [Key]
     public Guid Id { get; set; } = Guid.NewGuid();
 
+    public Guid? CompanyId { get; set; }
+    public Company? Company { get; set; }
+
     [Required]
     public string Name { get; set; } = null!;
 
@@ -45,6 +48,10 @@ public class Lead
     public bool HasManagerAlert { get; set; } = false;
 
     public string? Notes { get; set; }
+
+    public string? LossObservation { get; set; }
+
+    public ICollection<LeadLossReasonLink> LossReasonLinks { get; set; } = new List<LeadLossReasonLink>();
 
     [Range(0, 100)]
     public int? ConversionProbability { get; set; }

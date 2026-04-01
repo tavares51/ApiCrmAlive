@@ -3,6 +3,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using ApiCrmAlive.Models;
+using ApiCrmAlive.Utils;
 
 namespace ApiCrmAlive.Services.JWT;
 
@@ -13,11 +14,17 @@ public class JwtTokenService(IConfiguration config)
     public string GenerateToken(User user)
     {
         var key = Encoding.UTF8.GetBytes(_config["JwtSettings:Secret"]!);
-        var claims = new[]
+        var claims = new List<Claim>
         {
-            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new Claim(ClaimTypes.Email, user.Email)
+            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new(ClaimTypes.Email, user.Email)
         };
+
+        if (!string.IsNullOrWhiteSpace(user.Role))
+            claims.Add(new Claim(ClaimTypes.Role, user.Role));
+
+        if (user.CompanyId.HasValue)
+            claims.Add(new Claim(ClaimsPrincipalExtensions.CompanyIdClaim, user.CompanyId.Value.ToString()));
 
         var tokenDescriptor = new SecurityTokenDescriptor
         {

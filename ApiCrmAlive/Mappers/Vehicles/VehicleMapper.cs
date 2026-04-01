@@ -61,7 +61,7 @@ public class VehicleMapper()
         Mileage = dto.Mileage,
         Price = dto.Price,
         CostPrice = dto.CostPrice,
-        Status = dto.Status ?? VehicleStatusEnum.Disponivel,
+        Status = dto.Status ?? VehicleStatusEnum.Rascunho,
         EntryDate = dto.EntryDate.Date,
         Description = string.IsNullOrWhiteSpace(dto.Description) ? null : dto.Description.Trim(),
         Features = dto.Features?.Where(NotEmpty).Select(s => s!.Trim()).ToList(),

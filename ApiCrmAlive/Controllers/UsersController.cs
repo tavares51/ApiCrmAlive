@@ -28,6 +28,19 @@ public class UsersController(IUserService service) : ControllerBase
         return Ok(users);
     }
 
+    /// <summary>GET /api/users/vendedores</summary>
+    [HttpGet("vendedores")]
+    [SwaggerOperation(Summary = "Lista usuários do tipo vendedor (sem paginação)")]
+    [SwaggerResponse(200, "Lista de vendedores", typeof(IEnumerable<UserDto>))]
+    public async Task<ActionResult<IEnumerable<UserDto>>> GetAllVendedores(
+        [FromQuery] bool? isActive = null,
+        [FromQuery] string? search = null,
+        CancellationToken ct = default)
+    {
+        var users = await service.GetAllAsync(role: "vendedor", isActive: isActive, search: search, ct: ct);
+        return Ok(users);
+    }
+
 
     /// <summary>GET /api/users/:id</summary>
     [HttpGet("{id:guid}")]

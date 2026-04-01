@@ -8,6 +8,9 @@ public class User
     [Key]
     public Guid Id { get; set; } = Guid.NewGuid();
 
+    public Guid? CompanyId { get; set; }
+    public Company? Company { get; set; }
+
     [Required]
     [MaxLength(255)]
     public string Name { get; set; } = string.Empty;

@@ -11,17 +11,18 @@ public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
     {
         var cwd = Directory.GetCurrentDirectory();
         var direct = Path.Combine(cwd, ".env");
-        if (File.Exists(direct)) { Env.Load(direct); return; }
+        // .env is a fallback; allow explicit env vars (CLI/CI) to override.
+        if (File.Exists(direct)) { Env.NoClobber().Load(direct); return; }
 
         var probe = cwd;
         for (var i = 0; i < 5; i++)
         {
             probe = Directory.GetParent(probe)?.FullName ?? probe;
             var candidate = Path.Combine(probe, ".env");
-            if (File.Exists(candidate)) { Env.Load(candidate); return; }
+            if (File.Exists(candidate)) { Env.NoClobber().Load(candidate); return; }
         }
 
-        try { Env.Load(); } catch { /* ignore */ }
+        try { Env.NoClobber().Load(); } catch { /* ignore */ }
     }
 
     public AppDbContext CreateDbContext(string[] args)
@@ -67,4 +68,3 @@ public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
         return new AppDbContext(options);
     }
 }
-

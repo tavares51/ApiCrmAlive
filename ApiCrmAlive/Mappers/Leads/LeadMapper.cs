@@ -10,6 +10,7 @@ public static class LeadMapper
     {
         return new LeadDto(
             Id: e.Id,
+            CompanyId: e.CompanyId,
             Name: e.Name,
             Phone: e.Phone,
             Email: e.Email,
@@ -23,8 +24,10 @@ public static class LeadMapper
             LastContactDate: e.LastContactDate,
             NextFollowupDate: e.NextFollowupDate,
             SellerId: e.SellerId,
+            SellerName: e.Seller?.Name,
             HasManagerAlert: e.HasManagerAlert,
             Notes: e.Notes,
+            LossObservation: e.LossObservation,
             ConversionProbability: e.ConversionProbability,
             CreatedAt: e.CreatedAt,
             UpdatedAt: e.UpdatedAt
@@ -37,7 +40,7 @@ public static class LeadMapper
         {
             Id = Guid.NewGuid(),
             Name = dto.Name.Trim(),
-            Phone = dto.Phone.Trim(),
+            Phone = PhoneUtils.NormalizeBrazilPhone(dto.Phone),
             Email = string.IsNullOrWhiteSpace(dto.Email) ? null : dto.Email.Trim(),
             Source = dto.Source.Trim(),
             Status = LeadStatusEnum.Novo,
@@ -61,7 +64,7 @@ public static class LeadMapper
     public static void UpdateEntity(Lead e, LeadUpdateDto dto, Guid updatedBy)
     {
         if (!string.IsNullOrWhiteSpace(dto.Name)) e.Name = dto.Name.Trim();
-        if (!string.IsNullOrWhiteSpace(dto.Phone)) e.Phone = dto.Phone.Trim();
+        if (!string.IsNullOrWhiteSpace(dto.Phone)) e.Phone = PhoneUtils.NormalizeBrazilPhone(dto.Phone);
         if (dto.Email is not null) e.Email = string.IsNullOrWhiteSpace(dto.Email) ? null : dto.Email.Trim();
         if (!string.IsNullOrWhiteSpace(dto.Source)) e.Source = dto.Source.Trim();
 

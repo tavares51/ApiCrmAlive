@@ -28,17 +28,21 @@ namespace ApiCrmAlive.Controllers
             if (photos == null || !photos.Any(p => p.Length > 0))
                 return BadRequest("Nenhuma foto válida foi enviada.");
 
-            var newUrls = await UploadPhotos(photos);
-            if (newUrls.Count == 0)
+            var newObjectNames = await UploadPhotos(photos);
+            if (newObjectNames.Count == 0)
                 return BadRequest("Nenhuma foto foi adicionada com sucesso.");
 
-            // Atualiza a propriedade Photos diretamente no modelo Vehicle
-            var updatedPhotos = vehicle.Photos ?? [];
-            updatedPhotos.AddRange(newUrls);
-            vehicle.Photos = updatedPhotos;
+            // Obtém os object names já armazenados (não as URLs resolvidas do DTO)
+            var existingObjectNames = await _service.GetPhotosAsync(id);
+            existingObjectNames.AddRange(newObjectNames);
 
+            // Salva os nomes dos objetos (paths) no banco, não as URLs presigned
+            vehicle.Photos = existingObjectNames;
             await _service.UpdateAsync(id, vehicle, Guid.NewGuid());
-            return Ok(new { id = vehicle.Id, photos = vehicle.Photos });
+
+            // Gera URLs frescas apenas para a resposta
+            var freshUrls = await _uploader.GetUrlsAsync(existingObjectNames);
+            return Ok(new { id = vehicle.Id, photos = freshUrls });
         }
 
         [HttpDelete("veiculo/{id}/fotos/{fotoId}")]
@@ -68,8 +72,9 @@ namespace ApiCrmAlive.Controllers
         [SwaggerResponse(404, "Veículo não encontrado")]
         public async Task<IActionResult> GetPhotos(Guid id)
         {
-            var photos = await _service.GetPhotosAsync(id);
-            return Ok(photos);
+            var objectNames = await _service.GetPhotosAsync(id);
+            var urls = await _uploader.GetUrlsAsync(objectNames);
+            return Ok(urls);
         }
 
         private async Task<List<string>> UploadPhotos(List<IFormFile> files)

@@ -7,7 +7,7 @@ public class SaleCreateDto
     public Guid CustomerId { get; set; }
     public Guid VehicleId { get; set; }
     public Guid SellerId { get; set; }
-    public Guid LeadId { get; set; }
+    public Guid? LeadId { get; set; }
 
     public DateTime SaleDate { get; set; } = DateTime.UtcNow;
     public decimal SalePrice { get; set; }

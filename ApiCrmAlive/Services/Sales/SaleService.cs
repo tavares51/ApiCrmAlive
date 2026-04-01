@@ -37,6 +37,9 @@ public class SaleService(ISaleRepository repo, IUnitOfWork uow) : ISaleService
     {
         var list = await _repo.Query()
             .AsNoTracking()
+            .Include(s => s.Customer)
+            .Include(s => s.Vehicle)
+            .Include(s => s.Seller)
             .OrderByDescending(l => l.CreatedAt)
             .ToListAsync(ct);
 
@@ -45,7 +48,13 @@ public class SaleService(ISaleRepository repo, IUnitOfWork uow) : ISaleService
 
     public async Task<SaleDto?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
-        var sale = await _repo.GetByIdAsync(id, ct) ?? throw new KeyNotFoundException("Registro não encontrado.");
+        var sale = await _repo.Query()
+            .AsNoTracking()
+            .Include(s => s.Customer)
+            .Include(s => s.Vehicle)
+            .Include(s => s.Seller)
+            .FirstOrDefaultAsync(s => s.Id == id, ct)
+            ?? throw new KeyNotFoundException("Registro não encontrado.");
         return SaleMapper.ToDto(sale);
     }
 

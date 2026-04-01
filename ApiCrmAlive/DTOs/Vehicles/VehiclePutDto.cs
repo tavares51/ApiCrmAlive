@@ -17,7 +17,7 @@ public sealed class VehiclePutDto
     public int Mileage { get; set; }
     public decimal Price { get; set; }
     public decimal? CostPrice { get; set; }
-    public VehicleStatusEnum Status { get; set; } = VehicleStatusEnum.Disponivel;
+    public VehicleStatusEnum Status { get; set; } = VehicleStatusEnum.Rascunho;
     public DateTime EntryDate { get; set; }
     public string? Description { get; set; }
     public List<string>? Features { get; set; }
@@ -58,4 +58,3 @@ public sealed class VehiclePutDto
     public string? ModelDesc { get; set; }
     public string? Version { get; set; }
 }
-

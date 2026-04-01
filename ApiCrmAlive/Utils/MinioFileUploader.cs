@@ -41,9 +41,9 @@ public sealed class MinioFileUploader : IFileUploader
 
     public async Task<List<string>> UploadAsync(List<IFormFile> files)
     {
-        var urls = new List<string>();
+        var objectNames = new List<string>();
         if (files == null || files.Count == 0)
-            return urls;
+            return objectNames;
 
         await EnsureBucketAsync();
 
@@ -66,20 +66,7 @@ public sealed class MinioFileUploader : IFileUploader
                     .WithContentType(string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType);
 
                 await _minio.PutObjectAsync(putArgs);
-
-                if (_options.UsePresignedGetUrls)
-                {
-                    var presignArgs = new PresignedGetObjectArgs()
-                        .WithBucket(_options.Bucket!)
-                        .WithObject(objectName)
-                        .WithExpiry(Math.Clamp(_options.PresignedGetExpiryMinutes, 1, 7 * 24 * 60) * 60);
-
-                    urls.Add(await _minio.PresignedGetObjectAsync(presignArgs));
-                }
-                else
-                {
-                    urls.Add(BuildPublicUrl(_options, objectName));
-                }
+                objectNames.Add(objectName);
             }
             catch (Exception ex)
             {
@@ -87,7 +74,50 @@ public sealed class MinioFileUploader : IFileUploader
             }
         }
 
+        return objectNames;
+    }
+
+    public async Task<List<string>> GetUrlsAsync(List<string> objectNames)
+    {
+        var urls = new List<string>();
+        foreach (var rawValue in objectNames)
+        {
+            // Suporte a dados legados: se o valor já é uma URL, extrai o nome do objeto
+            var objectName = ExtractObjectName(rawValue);
+
+            if (_options.UsePresignedGetUrls)
+            {
+                var presignArgs = new PresignedGetObjectArgs()
+                    .WithBucket(_options.Bucket!)
+                    .WithObject(objectName)
+                    .WithExpiry(Math.Clamp(_options.PresignedGetExpiryMinutes, 1, 7 * 24 * 60) * 60);
+
+                urls.Add(await _minio.PresignedGetObjectAsync(presignArgs));
+            }
+            else
+            {
+                urls.Add(BuildPublicUrl(_options, objectName));
+            }
+        }
         return urls;
+    }
+
+    /// <summary>
+    /// Se o valor é uma URL completa (dados legados), extrai o path do objeto.
+    /// Ex: "http://minio:9000/vehicles/uploads/file.jpg?X-Amz-..." → "uploads/file.jpg"
+    /// </summary>
+    private string ExtractObjectName(string value)
+    {
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri))
+            return value; // já é um nome de objeto
+
+        // Remove o prefixo "/bucket/" do path
+        var path = uri.AbsolutePath.TrimStart('/');
+        var bucket = (_options.Bucket ?? string.Empty).TrimEnd('/') + "/";
+        if (path.StartsWith(bucket, StringComparison.OrdinalIgnoreCase))
+            path = path[bucket.Length..];
+
+        return path;
     }
 
     private async Task EnsureBucketAsync()

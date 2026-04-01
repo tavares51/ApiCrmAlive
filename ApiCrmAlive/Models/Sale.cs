@@ -21,20 +21,20 @@ public class Sale
     public Guid SellerId { get; set; }
     public User? Seller { get; set; }
 
-    [Required]
-    public Guid LeadId { get; set; }
+    public Guid? LeadId { get; set; }
     public Lead? Lead { get; set; }
 
     [Required]
     public DateTime SaleDate { get; set; } = DateTime.UtcNow;
 
-    [Precision(5, 2)]
+    // Money amounts need enough headroom for real-world values (car sales easily exceed 999.99).
+    [Precision(18, 2)]
     public decimal SalePrice { get; set; } = 0;
 
-    [Precision(5, 2)]
+    [Precision(18, 2)]
     public decimal DownPayment { get; set; } = 0;
 
-    [Precision(5, 2)]
+    [Precision(18, 2)]
     public decimal FinancingAmount { get; set; } = 0;
 
     public int Installments { get; set; } = 0;
@@ -46,7 +46,7 @@ public class Sale
     [Range(0, 100)]
     public decimal CommissionRate { get; set; } = 0;
     
-    [Precision(5, 2)] 
+    [Precision(18, 2)] 
     public decimal CommissionAmount { get; set; } = 0;
 
     public string? Notes { get; set; }

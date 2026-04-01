@@ -7,11 +7,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ApiCrmAlive.Services.Vehicles;
 
-public class VehicleService(IVehicleRepository repo, IUnitOfWork uow, VehicleMapper mapper) : IVehicleService
+public class VehicleService(IVehicleRepository repo, IUnitOfWork uow, VehicleMapper mapper, IFileUploader fileUploader) : IVehicleService
 {
     private readonly IVehicleRepository _repo = repo;
     private readonly IUnitOfWork _uow = uow;
     private readonly VehicleMapper _mapper = mapper;
+    private readonly IFileUploader _fileUploader = fileUploader;
 
     public async Task<IReadOnlyList<VehicleDto>> GetAllAsync(
         VehicleStatusEnum? status = null, string? make = null, string? model = null,
@@ -38,19 +39,20 @@ public class VehicleService(IVehicleRepository repo, IUnitOfWork uow, VehicleMap
         }
 
         var list = await q.OrderByDescending(v => v.CreatedAt).ToListAsync(ct);
-        return [.. list.Select(_mapper.ToDto)];
+        var dtos = await Task.WhenAll(list.Select(v => ResolvePhotosAsync(_mapper.ToDto(v))));
+        return dtos;
     }
 
     public async Task<VehicleDto> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
         var v = await _repo.GetByIdAsync(id, ct) ?? throw new KeyNotFoundException("Veículo não encontrado.");
-        return _mapper.ToDto(v);
+        return await ResolvePhotosAsync(_mapper.ToDto(v));
     }
 
     public async Task<VehicleDto?> GetByPlateAsync(string plate, CancellationToken ct = default)
     {
         var v = await _repo.GetByPlateAsync(plate, ct);
-        return v is null ? null : _mapper.ToDto(v);
+        return v is null ? null : await ResolvePhotosAsync(_mapper.ToDto(v));
     }
 
     public async Task<VehicleDto> CreateAsync(VehicleCreateDto dto, Guid updatedBy, CancellationToken ct = default)
@@ -64,7 +66,7 @@ public class VehicleService(IVehicleRepository repo, IUnitOfWork uow, VehicleMap
         await _repo.AddAsync(entity, ct);
         await _uow.SaveChangesAsync(ct);
 
-        return _mapper.ToDto(entity);
+        return await ResolvePhotosAsync(_mapper.ToDto(entity));
     }
 
     public async Task<VehicleDto> UpdateAsync(Guid id, VehicleDto dto, Guid updatedBy, CancellationToken ct = default)
@@ -120,7 +122,7 @@ public class VehicleService(IVehicleRepository repo, IUnitOfWork uow, VehicleMap
         _repo.Update(v);
         await _uow.SaveChangesAsync(ct);
 
-        return _mapper.ToDto(v);
+        return await ResolvePhotosAsync(_mapper.ToDto(v));
     }
 
     public async Task<VehicleDto> UpdateAsync(Guid id, VehiclePutDto dto, Guid updatedBy, CancellationToken ct = default)
@@ -175,7 +177,7 @@ public class VehicleService(IVehicleRepository repo, IUnitOfWork uow, VehicleMap
         _repo.Update(v);
         await _uow.SaveChangesAsync(ct);
 
-        return _mapper.ToDto(v);
+        return await ResolvePhotosAsync(_mapper.ToDto(v));
     }
 
     public async Task<VehicleDto> PatchAsync(Guid id, VehicleUpdateDto dto, Guid updatedBy, CancellationToken ct = default)
@@ -195,7 +197,7 @@ public class VehicleService(IVehicleRepository repo, IUnitOfWork uow, VehicleMap
         _repo.Update(v);
         await _uow.SaveChangesAsync(ct);
 
-        return _mapper.ToDto(v);
+        return await ResolvePhotosAsync(_mapper.ToDto(v));
     }
 
     public async Task UpdateStatusAsync(Guid id, VehicleStatusEnum status, Guid updatedBy, CancellationToken ct = default)
@@ -219,9 +221,13 @@ public class VehicleService(IVehicleRepository repo, IUnitOfWork uow, VehicleMap
     public async Task<List<string>> GetPhotosAsync(Guid id, CancellationToken ct = default)
     {
         var vehicle = await _repo.GetByIdAsync(id, ct) ?? throw new KeyNotFoundException("Veículo não encontrado.");
-        
-        // Retorna as fotos diretamente da propriedade Photos
         return vehicle.Photos ?? [];
+    }
+
+    private async Task<VehicleDto> ResolvePhotosAsync(VehicleDto dto)
+    {
+        dto.Photos = await _fileUploader.GetUrlsAsync(dto.Photos);
+        return dto;
     }
 
 }

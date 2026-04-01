@@ -11,9 +11,10 @@ namespace ApiCrmAlive.Controllers;
 [ApiController]
 [Route("api/vehicles")]
 [Produces("application/json")]
-public class VehiclesController(IVehicleService service, ICustomerRepository customers) : ControllerBase
+public class VehiclesController(IVehicleService service, ICustomerRepository customers, IFileUploader uploader) : ControllerBase
 {
     private readonly ICustomerRepository _customers = customers;
+    private readonly IFileUploader _uploader = uploader;
 
     /// <summary>GET /api/vehicles</summary>
     [HttpGet]
@@ -173,7 +174,8 @@ public class VehiclesController(IVehicleService service, ICustomerRepository cus
     [SwaggerResponse(404, "Veículo não encontrado")]
     public async Task<ActionResult<IEnumerable<string>>> GetPhotos(Guid id, CancellationToken ct)
     {
-        var photos = await service.GetPhotosAsync(id, ct);
-        return Ok(photos);
+        var objectNames = await service.GetPhotosAsync(id, ct);
+        var urls = await _uploader.GetUrlsAsync(objectNames);
+        return Ok(urls);
     }
 }

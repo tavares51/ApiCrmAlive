@@ -121,9 +121,11 @@ public class UserService(IUserRepository repo,
 
     public async Task<IReadOnlyList<UserDto>> GetAllAsync(string? role = null, bool? isActive = null, string? search = null, CancellationToken ct = default)
     {
+        var roleNorm = string.IsNullOrWhiteSpace(role) ? null : role.Trim().ToLowerInvariant();
         return await repo.Query()
             .AsNoTracking()
-            .Where(u => role == null || u.Role.Equals(role.Trim(), StringComparison.InvariantCultureIgnoreCase))
+            // EF Core nao traduz string.Equals(StringComparison) para SQL; normalize e compare de forma traduzivel.
+            .Where(u => roleNorm == null || u.Role.ToLower() == roleNorm)
             .Where(u => isActive == null || u.IsActive == isActive.Value)
             .Where(u => search == null || u.Name.Contains(search) || u.Email.Contains(search) || (u.Phone != null && u.Phone.Contains(search)))
             .OrderBy(u => u.Name)
