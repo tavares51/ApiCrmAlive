@@ -1,5 +1,6 @@
 ﻿using ApiCrmAlive.Utils;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace ApiCrmAlive.DTOs.Vehicles;
 
@@ -11,7 +12,6 @@ public class VehicleCreateDto
     public string Plate { get; set; } = default!;
     public string Color { get; set; } = default!;
     public FuelEnum Fuel { get; set; } 
-    public TransmissionEnum TransmissionEnum { get; set; }
     public int Mileage { get; set; }
     public decimal Price { get; set; }
     public DateTime EntryDate { get; set; }
@@ -22,7 +22,18 @@ public class VehicleCreateDto
     public List<string>? Images { get; set; }              
     public Guid? PreviousOwnerId { get; set; }
     public VehicleStatusEnum? Status { get; set; }
-    public TransmissionEnum Transmission { get; internal set; }
+
+    // Primary field (matches PUT/PATCH DTOs).
+    [JsonPropertyName("transmission")]
+    public TransmissionEnum Transmission { get; set; }
+
+    // Backward compatibility: some clients send "transmissionEnum".
+    [JsonPropertyName("transmissionEnum")]
+    public TransmissionEnum TransmissionEnum
+    {
+        get => Transmission;
+        set => Transmission = value;
+    }
     public int YearModel { get; set; }
 
     [MaxLength(2)]

@@ -82,7 +82,8 @@ public class LeadService(ILeadRepository repo, IUnitOfWork uow, IEvolutionWhatsa
 
                         var sellers = await _db.Users
                             .AsNoTracking()
-                            .Where(u => u.IsActive && u.Role == "vendedor")
+                            // Role is stored as free text; be tolerant to case differences ("Vendedor" vs "vendedor").
+                            .Where(u => u.IsActive && EF.Functions.ILike(u.Role, "vendedor"))
                             .OrderBy(u => u.CreatedAt)
                             .ThenBy(u => u.Id)
                             .Select(u => u.Id)
@@ -110,8 +111,14 @@ public class LeadService(ILeadRepository repo, IUnitOfWork uow, IEvolutionWhatsa
                         await _db.Leads.AddAsync(entity, ct);
                         await _db.SaveChangesAsync(ct);
 
+                        // Reload with Seller included so the create response includes SellerName (not only SellerId).
+                        var reloaded = await _db.Leads
+                            .AsNoTracking()
+                            .Include(l => l.Seller)
+                            .SingleAsync(l => l.Id == entity.Id, ct);
+
                         await tx.CommitAsync(ct);
-                        return LeadMapper.ToDto(entity);
+                        return LeadMapper.ToDto(reloaded);
                     }
                     catch
                     {
@@ -244,7 +251,7 @@ public class LeadService(ILeadRepository repo, IUnitOfWork uow, IEvolutionWhatsa
         // Validate seller existence (active seller).
         var sellerExists = await _db.Users
             .AsNoTracking()
-            .AnyAsync(u => u.Id == sellerId && u.IsActive && u.Role == "vendedor", ct);
+            .AnyAsync(u => u.Id == sellerId && u.IsActive && EF.Functions.ILike(u.Role, "vendedor"), ct);
 
         if (!sellerExists)
             throw new KeyNotFoundException("Vendedor não encontrado ou inativo.");
