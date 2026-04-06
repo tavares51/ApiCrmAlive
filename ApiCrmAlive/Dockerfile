@@ -2,11 +2,17 @@
 
 # Esta fase é usada durante a execução no VS no modo rápido (Padrão para a configuração de Depuração)
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
-ARG APP_UID=app
-USER $APP_UID
 WORKDIR /app
-EXPOSE 7879
-EXPOSE 7879
+
+# Default container port for ASP.NET Core is 8080. Keep it explicit so reverse proxies / PaaS
+# that rely on the image metadata don't end up forwarding to the wrong port.
+ENV ASPNETCORE_URLS=http://+:8080
+ENV ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
+EXPOSE 8080
+
+# Run as non-root in the final image.
+RUN mkdir -p /app && chown -R app:app /app
+USER app
 
 
 # Esta fase é usada para compilar o projeto de serviço
@@ -27,5 +33,5 @@ RUN dotnet publish "./ApiCrmAlive.csproj" -c $BUILD_CONFIGURATION -o /app/publis
 # Esta fase é usada na produção ou quando executada no VS no modo normal (padrão quando não está usando a configuração de Depuração)
 FROM base AS final
 WORKDIR /app
-COPY --from=publish /app/publish .
+COPY --chown=app:app --from=publish /app/publish .
 ENTRYPOINT ["dotnet", "ApiCrmAlive.dll"]

@@ -32,6 +32,7 @@ using ApiCrmAlive.Utils;
 using DotNetEnv;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -232,6 +233,19 @@ builder.Services.AddAuthorization(options =>
 
 var app = builder.Build();
 
+// If running behind a reverse proxy (Ingress/Nginx/Traefik/ALB), respect X-Forwarded-* so:
+// - HTTPS redirection works correctly
+// - generated URLs and scheme-aware behaviors are correct
+var forwardedHeadersOptions = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+};
+// Default is loopback-only; in container deployments the proxy is usually not loopback.
+// If you want to lock this down, configure KnownProxies/KnownNetworks explicitly per environment.
+forwardedHeadersOptions.KnownNetworks.Clear();
+forwardedHeadersOptions.KnownProxies.Clear();
+app.UseForwardedHeaders(forwardedHeadersOptions);
+
 if (string.Equals(Environment.GetEnvironmentVariable("APPLY_MIGRATIONS"), "true", StringComparison.OrdinalIgnoreCase))
 {
     // For local/dev containers: apply migrations automatically, with a small retry window while db is starting.
@@ -286,6 +300,8 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<ApiExceptionMiddleware>();
+
+app.MapGet("/healthz", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
 
 app.MapControllers();
 
