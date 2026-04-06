@@ -18,16 +18,18 @@ public sealed class AnalyticsService(AppDbContext db) : IAnalyticsService
         var nextMonthStart = monthStart.AddMonths(1);
         var activeCutoff = now.AddDays(-Math.Abs(activeCustomerDays));
 
-        var totalLeadsTask = _db.Leads.AsNoTracking().CountAsync(ct);
+        // IMPORTANT: A single DbContext instance cannot execute multiple operations concurrently.
+        // Keep these sequential (or use separate contexts via IDbContextFactory) to avoid 409/InvalidOperationException.
+        var totalLeads = await _db.Leads.AsNoTracking().CountAsync(ct);
 
         // No "IsActive" flag in Customer. Define "active" as recently purchased or having any purchase history.
-        var activeCustomersTask = _db.Customers.AsNoTracking()
+        var activeCustomers = await _db.Customers.AsNoTracking()
             .CountAsync(c => (c.LastPurchaseDate != null && c.LastPurchaseDate >= activeCutoff) || c.TotalPurchases > 0, ct);
 
-        var vehiclesInStockTask = _db.Vehicles.AsNoTracking()
+        var vehiclesInStock = await _db.Vehicles.AsNoTracking()
             .CountAsync(v => v.Status == VehicleStatusEnum.Disponivel || v.Status == VehicleStatusEnum.Reservado, ct);
 
-        var monthlyRevenueTask = _db.Sales.AsNoTracking()
+        var monthlyRevenue = await _db.Sales.AsNoTracking()
             .Where(s => s.SaleDate >= monthStart && s.SaleDate < nextMonthStart)
             .SumAsync(s => (decimal?)s.SalePrice, ct);
 
@@ -42,14 +44,12 @@ public sealed class AnalyticsService(AppDbContext db) : IAnalyticsService
             ? 0.0
             : entryDates.Average(d => (now - DateTime.SpecifyKind(d, DateTimeKind.Utc)).TotalDays);
 
-        await Task.WhenAll(totalLeadsTask, activeCustomersTask, vehiclesInStockTask, monthlyRevenueTask);
-
         return new KpisDto
         {
-            TotalLeads = totalLeadsTask.Result,
-            ActiveCustomers = activeCustomersTask.Result,
-            VehiclesInStock = vehiclesInStockTask.Result,
-            MonthlyRevenue = monthlyRevenueTask.Result ?? 0m,
+            TotalLeads = totalLeads,
+            ActiveCustomers = activeCustomers,
+            VehiclesInStock = vehiclesInStock,
+            MonthlyRevenue = monthlyRevenue ?? 0m,
             AverageDaysInStock = avgDays,
             Year = y,
             Month = m

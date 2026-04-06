@@ -1,0 +1,150 @@
+# ApiCrmAlive - Analytics Endpoints (cURL)
+#
+# Import no Postman:
+# - Postman > Import > Raw text > cole um bloco cURL por request (um de cada vez)
+#
+# Setup (troque BASE_URL e TOKEN):
+export BASE_URL="https://apicrm.manaagente.com"
+export TOKEN="SEU_JWT_AQUI"
+
+# Observacao: todos os endpoints abaixo exigem:
+#   Authorization: Bearer <token>
+# (o projeto usa FallbackPolicy exigindo auth por padrao)
+
+# Enums (serializam como numero no JSON):
+# LeadStatusEnum:
+#   0=Novo, 1=EmNegociacao, 2=EmAgendamentos, 3=Convertido, 4=Perdido
+# VehicleStatusEnum:
+#   0=Rascunho, 1=Disponivel, 2=Reservado, 3=Vendido
+
+################################################################################
+# 1) KPIs
+################################################################################
+curl --request GET \
+  --url "$BASE_URL/api/analytics/kpis?year=2026&month=4&activeCustomerDays=365" \
+  --header "Authorization: Bearer $TOKEN"
+
+# 200 (exemplo)
+# {
+#   "totalLeads": 123,
+#   "activeCustomers": 45,
+#   "vehiclesInStock": 12,
+#   "monthlyRevenue": 98765.43,
+#   "averageDaysInStock": 17.2,
+#   "year": 2026,
+#   "month": 4
+# }
+
+################################################################################
+# 2) Funil (Leads por Status)
+# from/to opcionais; "to" e exclusivo (< to)
+################################################################################
+curl --request GET \
+  --url "$BASE_URL/api/analytics/funnel?from=2026-04-01T00:00:00Z&to=2026-05-01T00:00:00Z" \
+  --header "Authorization: Bearer $TOKEN"
+
+# 200 (exemplo)
+# [
+#   { "status": 0, "count": 10 },
+#   { "status": 1, "count": 7 },
+#   { "status": 2, "count": 3 },
+#   { "status": 3, "count": 2 },
+#   { "status": 4, "count": 1 }
+# ]
+
+################################################################################
+# 3) Leads por Vendedor
+################################################################################
+curl --request GET \
+  --url "$BASE_URL/api/analytics/leads-by-seller?from=2026-04-01T00:00:00Z&to=2026-05-01T00:00:00Z" \
+  --header "Authorization: Bearer $TOKEN"
+
+# 200 (exemplo)
+# [
+#   { "sellerId": "11111111-1111-1111-1111-111111111111", "sellerName": "Maria", "leadsCount": 12 },
+#   { "sellerId": null, "sellerName": "Sem vendedor", "leadsCount": 4 }
+# ]
+
+################################################################################
+# 4) Top Vendedores do Mes (Top N por receita)
+# take default=5 (clamp 1..50)
+################################################################################
+curl --request GET \
+  --url "$BASE_URL/api/analytics/top-sellers?year=2026&month=4&take=5" \
+  --header "Authorization: Bearer $TOKEN"
+
+# 200 (exemplo)
+# [
+#   { "sellerId": "22222222-2222-2222-2222-222222222222", "sellerName": "Joao", "salesCount": 3, "totalRevenue": 45000.0 },
+#   { "sellerId": "33333333-3333-3333-3333-333333333333", "sellerName": "Ana", "salesCount": 2, "totalRevenue": 30000.0 }
+# ]
+
+################################################################################
+# 5) Conversao por Portal (Lead.Source)
+################################################################################
+curl --request GET \
+  --url "$BASE_URL/api/analytics/conversion-by-portal?from=2026-04-01T00:00:00Z&to=2026-05-01T00:00:00Z" \
+  --header "Authorization: Bearer $TOKEN"
+
+# 200 (exemplo)
+# [
+#   { "source": "OLX", "leadsCount": 20, "convertedLeadsCount": 4, "conversionRate": 0.2 },
+#   { "source": "Instagram", "leadsCount": 10, "convertedLeadsCount": 1, "conversionRate": 0.1 }
+# ]
+
+################################################################################
+# 6) Conversao por Vendedor
+################################################################################
+curl --request GET \
+  --url "$BASE_URL/api/analytics/conversion-by-seller?from=2026-04-01T00:00:00Z&to=2026-05-01T00:00:00Z" \
+  --header "Authorization: Bearer $TOKEN"
+
+# 200 (exemplo)
+# [
+#   { "sellerId": "11111111-1111-1111-1111-111111111111", "sellerName": "Maria", "leadsCount": 12, "convertedLeadsCount": 3, "conversionRate": 0.25 },
+#   { "sellerId": null, "sellerName": "Sem vendedor", "leadsCount": 4, "convertedLeadsCount": 0, "conversionRate": 0.0 }
+# ]
+
+################################################################################
+# 7) Conversao de Leads (Resumo)
+################################################################################
+curl --request GET \
+  --url "$BASE_URL/api/analytics/lead-conversion-summary?from=2026-04-01T00:00:00Z&to=2026-05-01T00:00:00Z" \
+  --header "Authorization: Bearer $TOKEN"
+
+# 200 (exemplo)
+# {
+#   "totalLeads": 30,
+#   "convertedLeads": 5,
+#   "conversionRate": 0.16666666666666666
+# }
+
+################################################################################
+# 8) Vendas Mensais (serie)
+# months default=12 (clamp 1..60)
+################################################################################
+curl --request GET \
+  --url "$BASE_URL/api/analytics/monthly-sales?months=12" \
+  --header "Authorization: Bearer $TOKEN"
+
+# 200 (exemplo)
+# [
+#   { "year": 2025, "month": 5, "salesCount": 0, "revenue": 0.0 },
+#   { "year": 2025, "month": 6, "salesCount": 2, "revenue": 18000.0 }
+# ]
+
+################################################################################
+# 9) Veiculos por Status
+################################################################################
+curl --request GET \
+  --url "$BASE_URL/api/analytics/vehicles-by-status" \
+  --header "Authorization: Bearer $TOKEN"
+
+# 200 (exemplo)
+# [
+#   { "status": 0, "count": 1 },
+#   { "status": 1, "count": 10 },
+#   { "status": 2, "count": 2 },
+#   { "status": 3, "count": 7 }
+# ]
+

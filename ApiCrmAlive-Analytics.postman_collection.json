@@ -1,0 +1,187 @@
+{
+  "info": {
+    "_postman_id": "7f8b0d1c-5d9b-4a6c-9df4-4f4f1c8b3e6b",
+    "name": "ApiCrmAlive - Analytics",
+    "description": "Endpoints de Analytics do ApiCrmAlive.\n\nComo usar:\n- Ajuste as variaveis da collection: baseUrl e token (JWT)\n- A collection aplica Authorization Bearer automaticamente em todos os requests.\n\nObservacao: os endpoints exigem autenticacao (FallbackPolicy).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "https://apicrm.manaagente.com", "type": "string" },
+    { "key": "token", "value": "SEU_JWT_AQUI", "type": "string" },
+    { "key": "from", "value": "2026-04-01T00:00:00Z", "type": "string" },
+    { "key": "to", "value": "2026-05-01T00:00:00Z", "type": "string" },
+    { "key": "year", "value": "2026", "type": "string" },
+    { "key": "month", "value": "4", "type": "string" },
+    { "key": "activeCustomerDays", "value": "365", "type": "string" },
+    { "key": "take", "value": "5", "type": "string" },
+    { "key": "months", "value": "12", "type": "string" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "{{token}}", "type": "string" }
+    ]
+  },
+  "item": [
+    {
+      "name": "KPIs",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Accept", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/analytics/kpis?year={{year}}&month={{month}}&activeCustomerDays={{activeCustomerDays}}",
+          "host": [ "{{baseUrl}}" ],
+          "path": [ "api", "analytics", "kpis" ],
+          "query": [
+            { "key": "year", "value": "{{year}}" },
+            { "key": "month", "value": "{{month}}" },
+            { "key": "activeCustomerDays", "value": "{{activeCustomerDays}}" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Funnel",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Accept", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/analytics/funnel?from={{from}}&to={{to}}",
+          "host": [ "{{baseUrl}}" ],
+          "path": [ "api", "analytics", "funnel" ],
+          "query": [
+            { "key": "from", "value": "{{from}}" },
+            { "key": "to", "value": "{{to}}" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Leads By Seller",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Accept", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/analytics/leads-by-seller?from={{from}}&to={{to}}",
+          "host": [ "{{baseUrl}}" ],
+          "path": [ "api", "analytics", "leads-by-seller" ],
+          "query": [
+            { "key": "from", "value": "{{from}}" },
+            { "key": "to", "value": "{{to}}" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Top Sellers (Month)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Accept", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/analytics/top-sellers?year={{year}}&month={{month}}&take={{take}}",
+          "host": [ "{{baseUrl}}" ],
+          "path": [ "api", "analytics", "top-sellers" ],
+          "query": [
+            { "key": "year", "value": "{{year}}" },
+            { "key": "month", "value": "{{month}}" },
+            { "key": "take", "value": "{{take}}" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Conversion By Portal",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Accept", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/analytics/conversion-by-portal?from={{from}}&to={{to}}",
+          "host": [ "{{baseUrl}}" ],
+          "path": [ "api", "analytics", "conversion-by-portal" ],
+          "query": [
+            { "key": "from", "value": "{{from}}" },
+            { "key": "to", "value": "{{to}}" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Conversion By Seller",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Accept", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/analytics/conversion-by-seller?from={{from}}&to={{to}}",
+          "host": [ "{{baseUrl}}" ],
+          "path": [ "api", "analytics", "conversion-by-seller" ],
+          "query": [
+            { "key": "from", "value": "{{from}}" },
+            { "key": "to", "value": "{{to}}" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Lead Conversion Summary",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Accept", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/analytics/lead-conversion-summary?from={{from}}&to={{to}}",
+          "host": [ "{{baseUrl}}" ],
+          "path": [ "api", "analytics", "lead-conversion-summary" ],
+          "query": [
+            { "key": "from", "value": "{{from}}" },
+            { "key": "to", "value": "{{to}}" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Monthly Sales",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Accept", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/analytics/monthly-sales?months={{months}}",
+          "host": [ "{{baseUrl}}" ],
+          "path": [ "api", "analytics", "monthly-sales" ],
+          "query": [
+            { "key": "months", "value": "{{months}}" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Vehicles By Status",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Accept", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/analytics/vehicles-by-status",
+          "host": [ "{{baseUrl}}" ],
+          "path": [ "api", "analytics", "vehicles-by-status" ]
+        }
+      }
+    }
+  ]
+}
+
