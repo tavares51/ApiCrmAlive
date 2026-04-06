@@ -6,7 +6,6 @@ WORKDIR /app
 
 # Default container port for ASP.NET Core is 8080. Keep it explicit so reverse proxies / PaaS
 # that rely on the image metadata don't end up forwarding to the wrong port.
-ENV ASPNETCORE_URLS=http://+:8080
 ENV ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
 EXPOSE 8080
 

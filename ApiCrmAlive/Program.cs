@@ -40,6 +40,19 @@ using Npgsql;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Some platforms (Coolify/Heroku-like) inject a single PORT env var and expect the app to bind to it.
+// Respect it unless ASPNETCORE_URLS is already explicitly set.
+var urls = Environment.GetEnvironmentVariable("ASPNETCORE_URLS");
+var portEnv = Environment.GetEnvironmentVariable("PORT");
+if (string.IsNullOrWhiteSpace(urls) &&
+    !string.IsNullOrWhiteSpace(portEnv) &&
+    int.TryParse(portEnv, out var port) &&
+    port is > 0 and < 65536)
+{
+    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+}
+
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var secretKey = jwtSettings["Secret"]!;
 static void LoadEnvFromLikelyLocations()
@@ -246,24 +259,55 @@ forwardedHeadersOptions.KnownNetworks.Clear();
 forwardedHeadersOptions.KnownProxies.Clear();
 app.UseForwardedHeaders(forwardedHeadersOptions);
 
+// Health endpoint that stays reachable over plain HTTP (no HTTPS redirect), so reverse-proxy healthchecks
+// don't fail with a 30x and mark the service as down.
+app.UseWhen(
+    ctx => ctx.Request.Path.Equals("/healthz", StringComparison.Ordinal),
+    healthApp =>
+    {
+        healthApp.Run(async ctx =>
+        {
+            ctx.Response.StatusCode = StatusCodes.Status200OK;
+            ctx.Response.ContentType = "application/json";
+            await ctx.Response.WriteAsync("{\"status\":\"ok\"}");
+        });
+    });
+
 if (string.Equals(Environment.GetEnvironmentVariable("APPLY_MIGRATIONS"), "true", StringComparison.OrdinalIgnoreCase))
 {
     // For local/dev containers: apply migrations automatically, with a small retry window while db is starting.
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
+    var strictMigrations =
+        app.Environment.IsDevelopment() ||
+        string.Equals(Environment.GetEnvironmentVariable("APPLY_MIGRATIONS_STRICT"), "true", StringComparison.OrdinalIgnoreCase);
+
+    Exception? lastError = null;
     for (var attempt = 1; attempt <= 10; attempt++)
     {
         try
         {
             db.Database.Migrate();
+            lastError = null;
             break;
         }
-        catch when (attempt < 10)
+        catch (Exception ex) when (attempt < 10)
         {
+            lastError = ex;
             Thread.Sleep(TimeSpan.FromSeconds(2));
         }
-	}
+        catch (Exception ex)
+        {
+            lastError = ex;
+        }
+    }
+
+    if (lastError is not null)
+    {
+        Console.Error.WriteLine($"[migrations] Failed after retries: {lastError.GetType().Name}: {lastError.Message}");
+        if (strictMigrations) throw lastError;
+    }
 }
 
 // Dev bootstrap: keep the API usable before multi-tenant setup is wired end-to-end.
@@ -300,8 +344,6 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<ApiExceptionMiddleware>();
-
-app.MapGet("/healthz", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
 
 app.MapControllers();
 
