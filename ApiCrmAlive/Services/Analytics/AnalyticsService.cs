@@ -346,7 +346,6 @@ public sealed class AnalyticsService(AppDbContext db) : IAnalyticsService
     {
         var companyUserIds = CompanyUserIds(companyId);
         return await _db.Vehicles.AsNoTracking()
-            .Where(v => companyUserIds.Contains(v.UpdatedBy))
             .GroupBy(v => v.Status)
             .Select(g => new VehiclesByStatusDto { Status = g.Key, Count = g.Count() })
             .OrderBy(x => x.Status)
