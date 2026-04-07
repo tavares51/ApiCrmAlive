@@ -9,7 +9,20 @@ public sealed class AnalyticsService(AppDbContext db) : IAnalyticsService
 {
     private readonly AppDbContext _db = db;
 
-    public async Task<KpisDto> GetKpisAsync(int? year, int? month, int activeCustomerDays, CancellationToken ct = default)
+    private IQueryable<Guid> CompanyUserIds(Guid companyId)
+        => _db.Users.AsNoTracking()
+            .Where(u => u.CompanyId == companyId)
+            .Select(u => u.Id);
+
+    private IQueryable<Models.Lead> CompanyLeads(Guid companyId)
+    {
+        var userIds = CompanyUserIds(companyId);
+        // Prefer the explicit Lead.CompanyId, but keep a fallback using UpdatedBy for older rows.
+        return _db.Leads.AsNoTracking()
+            .Where(l => l.CompanyId == companyId || (l.CompanyId == null && userIds.Contains(l.UpdatedBy)));
+    }
+
+    public async Task<KpisDto> GetKpisAsync(Guid companyId, int? year, int? month, int activeCustomerDays, CancellationToken ct = default)
     {
         var now = DateTime.UtcNow;
         var y = year ?? now.Year;
@@ -18,24 +31,32 @@ public sealed class AnalyticsService(AppDbContext db) : IAnalyticsService
         var nextMonthStart = monthStart.AddMonths(1);
         var activeCutoff = now.AddDays(-Math.Abs(activeCustomerDays));
 
+        var companyUserIds = CompanyUserIds(companyId);
+        var leads = CompanyLeads(companyId);
+
         // IMPORTANT: A single DbContext instance cannot execute multiple operations concurrently.
         // Keep these sequential (or use separate contexts via IDbContextFactory) to avoid 409/InvalidOperationException.
-        var totalLeads = await _db.Leads.AsNoTracking().CountAsync(ct);
+        var totalLeads = await leads.CountAsync(ct);
 
         // No "IsActive" flag in Customer. Define "active" as recently purchased or having any purchase history.
+        // Customer doesn't have CompanyId yet; scope by UpdatedBy (user belonging to company).
         var activeCustomers = await _db.Customers.AsNoTracking()
+            .Where(c => companyUserIds.Contains(c.UpdatedBy))
             .CountAsync(c => (c.LastPurchaseDate != null && c.LastPurchaseDate >= activeCutoff) || c.TotalPurchases > 0, ct);
 
         var vehiclesInStock = await _db.Vehicles.AsNoTracking()
+            .Where(v => companyUserIds.Contains(v.UpdatedBy))
             .CountAsync(v => v.Status == VehicleStatusEnum.Disponivel || v.Status == VehicleStatusEnum.Reservado, ct);
 
         var monthlyRevenue = await _db.Sales.AsNoTracking()
+            .Where(s => companyUserIds.Contains(s.SellerId))
             .Where(s => s.SaleDate >= monthStart && s.SaleDate < nextMonthStart)
             .SumAsync(s => (decimal?)s.SalePrice, ct);
 
         // Compute average "days in stock" for vehicles currently in stock, based on EntryDate.
         // Kept as in-memory to avoid provider-specific date arithmetic translation issues.
         var entryDates = await _db.Vehicles.AsNoTracking()
+            .Where(v => companyUserIds.Contains(v.UpdatedBy))
             .Where(v => v.Status == VehicleStatusEnum.Disponivel || v.Status == VehicleStatusEnum.Reservado)
             .Select(v => v.EntryDate)
             .ToListAsync(ct);
@@ -56,9 +77,9 @@ public sealed class AnalyticsService(AppDbContext db) : IAnalyticsService
         };
     }
 
-    public async Task<IReadOnlyList<FunnelStageDto>> GetSalesFunnelAsync(DateTime? from, DateTime? to, CancellationToken ct = default)
+    public async Task<IReadOnlyList<FunnelStageDto>> GetSalesFunnelAsync(Guid companyId, DateTime? from, DateTime? to, CancellationToken ct = default)
     {
-        var q = _db.Leads.AsNoTracking().AsQueryable();
+        var q = CompanyLeads(companyId).AsQueryable();
         if (from.HasValue) q = q.Where(l => l.CreatedAt >= from.Value);
         if (to.HasValue) q = q.Where(l => l.CreatedAt < to.Value);
 
@@ -82,9 +103,9 @@ public sealed class AnalyticsService(AppDbContext db) : IAnalyticsService
             .ToList();
     }
 
-    public async Task<IReadOnlyList<LeadsBySellerDto>> GetLeadsBySellerAsync(DateTime? from, DateTime? to, CancellationToken ct = default)
+    public async Task<IReadOnlyList<LeadsBySellerDto>> GetLeadsBySellerAsync(Guid companyId, DateTime? from, DateTime? to, CancellationToken ct = default)
     {
-        var q = _db.Leads.AsNoTracking()
+        var q = CompanyLeads(companyId)
             .Include(l => l.Seller)
             .AsQueryable();
 
@@ -105,7 +126,7 @@ public sealed class AnalyticsService(AppDbContext db) : IAnalyticsService
         return list;
     }
 
-    public async Task<IReadOnlyList<TopSellerDto>> GetTopSellersOfMonthAsync(int? year, int? month, int take, CancellationToken ct = default)
+    public async Task<IReadOnlyList<TopSellerDto>> GetTopSellersOfMonthAsync(Guid companyId, int? year, int? month, int take, CancellationToken ct = default)
     {
         var now = DateTime.UtcNow;
         var y = year ?? now.Year;
@@ -113,11 +134,13 @@ public sealed class AnalyticsService(AppDbContext db) : IAnalyticsService
         var monthStart = new DateTime(y, m, 1, 0, 0, 0, DateTimeKind.Utc);
         var nextMonthStart = monthStart.AddMonths(1);
         var top = Math.Clamp(take, 1, 50);
+        var companyUserIds = CompanyUserIds(companyId);
 
         // Join Sales -> Users to provide names in one query.
         var query = from s in _db.Sales.AsNoTracking()
                     join u in _db.Users.AsNoTracking() on s.SellerId equals u.Id
                     where s.SaleDate >= monthStart && s.SaleDate < nextMonthStart
+                    where companyUserIds.Contains(s.SellerId)
                     group new { s, u } by new { s.SellerId, u.Name } into g
                     orderby g.Sum(x => x.s.SalePrice) descending, g.Count() descending
                     select new TopSellerDto
@@ -131,10 +154,14 @@ public sealed class AnalyticsService(AppDbContext db) : IAnalyticsService
         return await query.Take(top).ToListAsync(ct);
     }
 
-    public async Task<IReadOnlyList<ConversionByPortalDto>> GetConversionByPortalAsync(DateTime? from, DateTime? to, CancellationToken ct = default)
+    public async Task<IReadOnlyList<ConversionByPortalDto>> GetConversionByPortalAsync(Guid companyId, DateTime? from, DateTime? to, CancellationToken ct = default)
     {
-        var leads = _db.Leads.AsNoTracking().AsQueryable();
-        var sales = _db.Sales.AsNoTracking().Where(s => s.LeadId != null).AsQueryable();
+        var companyUserIds = CompanyUserIds(companyId);
+        var leads = CompanyLeads(companyId).AsQueryable();
+        var sales = _db.Sales.AsNoTracking()
+            .Where(s => s.LeadId != null)
+            .Where(s => companyUserIds.Contains(s.SellerId))
+            .AsQueryable();
 
         if (from.HasValue)
         {
@@ -155,6 +182,7 @@ public sealed class AnalyticsService(AppDbContext db) : IAnalyticsService
 
         var convertedBySource = await (from s in sales
                                        join l in _db.Leads.AsNoTracking() on s.LeadId equals l.Id
+                                       where l.CompanyId == companyId || (l.CompanyId == null && companyUserIds.Contains(l.UpdatedBy))
                                        select new { l.Source, LeadId = l.Id })
             .Distinct()
             .GroupBy(x => x.Source)
@@ -180,14 +208,16 @@ public sealed class AnalyticsService(AppDbContext db) : IAnalyticsService
             .ToList();
     }
 
-    public async Task<IReadOnlyList<ConversionBySellerDto>> GetConversionBySellerAsync(DateTime? from, DateTime? to, CancellationToken ct = default)
+    public async Task<IReadOnlyList<ConversionBySellerDto>> GetConversionBySellerAsync(Guid companyId, DateTime? from, DateTime? to, CancellationToken ct = default)
     {
-        var leads = _db.Leads.AsNoTracking()
+        var companyUserIds = CompanyUserIds(companyId);
+        var leads = CompanyLeads(companyId)
             .Include(l => l.Seller)
             .AsQueryable();
 
         var sales = _db.Sales.AsNoTracking()
             .Where(s => s.LeadId != null)
+            .Where(s => companyUserIds.Contains(s.SellerId))
             .AsQueryable();
 
         if (from.HasValue)
@@ -210,6 +240,7 @@ public sealed class AnalyticsService(AppDbContext db) : IAnalyticsService
         // Count distinct converted leads, attributed by lead.SellerId.
         var converted = await (from s in sales
                                join l in _db.Leads.AsNoTracking() on s.LeadId equals l.Id
+                               where l.CompanyId == companyId || (l.CompanyId == null && companyUserIds.Contains(l.UpdatedBy))
                                select new { l.SellerId, l.Id })
             .Distinct()
             .GroupBy(x => x.SellerId)
@@ -239,10 +270,12 @@ public sealed class AnalyticsService(AppDbContext db) : IAnalyticsService
             .ToList();
     }
 
-    public async Task<LeadConversionSummaryDto> GetLeadConversionSummaryAsync(DateTime? from, DateTime? to, CancellationToken ct = default)
+    public async Task<LeadConversionSummaryDto> GetLeadConversionSummaryAsync(Guid companyId, DateTime? from, DateTime? to, CancellationToken ct = default)
     {
-        var leads = _db.Leads.AsNoTracking().AsQueryable();
+        var companyUserIds = CompanyUserIds(companyId);
+        var leads = CompanyLeads(companyId).AsQueryable();
         var sales = _db.Sales.AsNoTracking().Where(s => s.LeadId != null).AsQueryable();
+        sales = sales.Where(s => companyUserIds.Contains(s.SellerId));
 
         if (from.HasValue)
         {
@@ -258,6 +291,8 @@ public sealed class AnalyticsService(AppDbContext db) : IAnalyticsService
 
         var total = await leads.CountAsync(ct);
         var converted = await (from s in sales
+                               join l in _db.Leads.AsNoTracking() on s.LeadId equals l.Id
+                               where l.CompanyId == companyId || (l.CompanyId == null && companyUserIds.Contains(l.UpdatedBy))
                                select s.LeadId!.Value)
             .Distinct()
             .CountAsync(ct);
@@ -270,14 +305,16 @@ public sealed class AnalyticsService(AppDbContext db) : IAnalyticsService
         };
     }
 
-    public async Task<IReadOnlyList<MonthlySalesPointDto>> GetMonthlySalesAsync(int months, CancellationToken ct = default)
+    public async Task<IReadOnlyList<MonthlySalesPointDto>> GetMonthlySalesAsync(Guid companyId, int months, CancellationToken ct = default)
     {
         var take = Math.Clamp(months, 1, 60);
         var now = DateTime.UtcNow;
         var start = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc).AddMonths(-(take - 1));
         var end = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc).AddMonths(1);
+        var companyUserIds = CompanyUserIds(companyId);
 
         var grouped = await _db.Sales.AsNoTracking()
+            .Where(s => companyUserIds.Contains(s.SellerId))
             .Where(s => s.SaleDate >= start && s.SaleDate < end)
             .GroupBy(s => new { s.SaleDate.Year, s.SaleDate.Month })
             .Select(g => new MonthlySalesPointDto
@@ -305,9 +342,11 @@ public sealed class AnalyticsService(AppDbContext db) : IAnalyticsService
         return result;
     }
 
-    public async Task<IReadOnlyList<VehiclesByStatusDto>> GetVehiclesByStatusAsync(CancellationToken ct = default)
+    public async Task<IReadOnlyList<VehiclesByStatusDto>> GetVehiclesByStatusAsync(Guid companyId, CancellationToken ct = default)
     {
+        var companyUserIds = CompanyUserIds(companyId);
         return await _db.Vehicles.AsNoTracking()
+            .Where(v => companyUserIds.Contains(v.UpdatedBy))
             .GroupBy(v => v.Status)
             .Select(g => new VehiclesByStatusDto { Status = g.Key, Count = g.Count() })
             .OrderBy(x => x.Status)
