@@ -283,6 +283,17 @@ if (string.Equals(Environment.GetEnvironmentVariable("APPLY_MIGRATIONS"), "true"
         app.Environment.IsDevelopment() ||
         string.Equals(Environment.GetEnvironmentVariable("APPLY_MIGRATIONS_STRICT"), "true", StringComparison.OrdinalIgnoreCase);
 
+    // If the app was built without migrations compiled into the assembly, Migrate() will be a no-op.
+    // In strict mode, fail fast so deployments don't come up with an uninitialized schema.
+    var knownMigrations = db.Database.GetMigrations().ToList();
+    if (knownMigrations.Count == 0)
+    {
+        var msg = "EF Core migrations not found in the application assembly. " +
+                  "Ensure the Migrations folder is present and committed/built.";
+        Console.Error.WriteLine($"[migrations] {msg}");
+        if (strictMigrations) throw new InvalidOperationException(msg);
+    }
+
     Exception? lastError = null;
     for (var attempt = 1; attempt <= 10; attempt++)
     {

@@ -11,7 +11,7 @@ ENV ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
 # Override at deploy-time if you don't want this behavior.
 ENV APPLY_MIGRATIONS=true
 ENV APPLY_MIGRATIONS_STRICT=true
-EXPOSE 7879
+EXPOSE 8080
 
 # Run as non-root in the final image.
 RUN mkdir -p /app && chown -R app:app /app
