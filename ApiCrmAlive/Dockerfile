@@ -7,7 +7,10 @@ WORKDIR /app
 # Default container port for ASP.NET Core is 8080. Keep it explicit so reverse proxies / PaaS
 # that rely on the image metadata don't end up forwarding to the wrong port.
 ENV ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
-EXPOSE 8080
+# Apply EF Core migrations automatically on boot (implemented in Program.cs).
+# Override at deploy-time if you don't want this behavior.
+ENV APPLY_MIGRATIONS=true
+EXPOSE 7879
 
 # Run as non-root in the final image.
 RUN mkdir -p /app && chown -R app:app /app

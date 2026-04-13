@@ -1,13 +1,58 @@
 using ApiCrmAlive.Context;
 using ApiCrmAlive.DTOs.Analytics;
 using ApiCrmAlive.Utils;
+using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
 
 namespace ApiCrmAlive.Services.Analytics;
 
-public sealed class AnalyticsService(AppDbContext db) : IAnalyticsService
+public sealed class AnalyticsService : IAnalyticsService
 {
-    private readonly AppDbContext _db = db;
+    private readonly AppDbContext _db;
+    private readonly TimeZoneInfo _analyticsTimeZone;
+
+    public AnalyticsService(AppDbContext db, IConfiguration config)
+    {
+        _db = db;
+        _analyticsTimeZone = ResolveAnalyticsTimeZone(config);
+    }
+
+    private static TimeZoneInfo ResolveAnalyticsTimeZone(IConfiguration config)
+    {
+        // Postgres columns are "timestamp without time zone" in this project; treat "SaleDate" month boundaries as
+        // business-local wall time, not server UTC, to avoid month-shift bugs when clients send local timestamps.
+        var tzId = config["Analytics:TimeZone"];
+        if (string.IsNullOrWhiteSpace(tzId))
+            tzId = "America/Sao_Paulo";
+
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById(tzId);
+        }
+        catch
+        {
+            // Windows uses different IDs. Keep a small fallback without pulling extra dependencies.
+            if (string.Equals(tzId, "America/Sao_Paulo", StringComparison.OrdinalIgnoreCase))
+            {
+                try { return TimeZoneInfo.FindSystemTimeZoneById("E. South America Standard Time"); } catch { /* ignore */ }
+            }
+
+            return TimeZoneInfo.Utc;
+        }
+    }
+
+    private (int Year, int Month) GetNowYearMonthInAnalyticsTz()
+    {
+        var nowTz = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, _analyticsTimeZone);
+        return (nowTz.Year, nowTz.Month);
+    }
+
+    private static (DateTime MonthStart, DateTime NextMonthStart) GetMonthRange(int year, int month)
+    {
+        // Unspecified aligns best with "timestamp without time zone".
+        var monthStart = new DateTime(year, month, 1, 0, 0, 0, DateTimeKind.Unspecified);
+        return (monthStart, monthStart.AddMonths(1));
+    }
 
     private IQueryable<Guid> CompanyUserIds(Guid companyId)
         => _db.Users.AsNoTracking()
@@ -24,12 +69,12 @@ public sealed class AnalyticsService(AppDbContext db) : IAnalyticsService
 
     public async Task<KpisDto> GetKpisAsync(Guid companyId, int? year, int? month, int activeCustomerDays, CancellationToken ct = default)
     {
-        var now = DateTime.UtcNow;
-        var y = year ?? now.Year;
-        var m = month ?? now.Month;
-        var monthStart = new DateTime(y, m, 1, 0, 0, 0, DateTimeKind.Utc);
-        var nextMonthStart = monthStart.AddMonths(1);
-        var activeCutoff = now.AddDays(-Math.Abs(activeCustomerDays));
+        var nowUtc = DateTime.UtcNow;
+        var (nowYear, nowMonth) = GetNowYearMonthInAnalyticsTz();
+        var y = year ?? nowYear;
+        var m = month ?? nowMonth;
+        var (monthStart, nextMonthStart) = GetMonthRange(y, m);
+        var activeCutoff = nowUtc.AddDays(-Math.Abs(activeCustomerDays));
 
         var companyUserIds = CompanyUserIds(companyId);
         var leads = CompanyLeads(companyId);
@@ -63,7 +108,7 @@ public sealed class AnalyticsService(AppDbContext db) : IAnalyticsService
 
         var avgDays = entryDates.Count == 0
             ? 0.0
-            : entryDates.Average(d => (now - DateTime.SpecifyKind(d, DateTimeKind.Utc)).TotalDays);
+            : entryDates.Average(d => (nowUtc - DateTime.SpecifyKind(d, DateTimeKind.Utc)).TotalDays);
 
         return new KpisDto
         {
@@ -128,11 +173,10 @@ public sealed class AnalyticsService(AppDbContext db) : IAnalyticsService
 
     public async Task<IReadOnlyList<TopSellerDto>> GetTopSellersOfMonthAsync(Guid companyId, int? year, int? month, int take, CancellationToken ct = default)
     {
-        var now = DateTime.UtcNow;
-        var y = year ?? now.Year;
-        var m = month ?? now.Month;
-        var monthStart = new DateTime(y, m, 1, 0, 0, 0, DateTimeKind.Utc);
-        var nextMonthStart = monthStart.AddMonths(1);
+        var (nowYear, nowMonth) = GetNowYearMonthInAnalyticsTz();
+        var y = year ?? nowYear;
+        var m = month ?? nowMonth;
+        var (monthStart, nextMonthStart) = GetMonthRange(y, m);
         var top = Math.Clamp(take, 1, 50);
         var companyUserIds = CompanyUserIds(companyId);
 
@@ -176,14 +220,15 @@ public sealed class AnalyticsService(AppDbContext db) : IAnalyticsService
         }
 
         var leadsBySource = await leads
-            .GroupBy(l => l.Source)
+            // Defensive normalization: avoid splitting the same source by trailing/leading spaces.
+            .GroupBy(l => l.Source.Trim())
             .Select(g => new { Source = g.Key, LeadsCount = g.Count() })
             .ToListAsync(ct);
 
         var convertedBySource = await (from s in sales
                                        join l in _db.Leads.AsNoTracking() on s.LeadId equals l.Id
                                        where l.CompanyId == companyId || (l.CompanyId == null && companyUserIds.Contains(l.UpdatedBy))
-                                       select new { l.Source, LeadId = l.Id })
+                                       select new { Source = l.Source.Trim(), LeadId = l.Id })
             .Distinct()
             .GroupBy(x => x.Source)
             .Select(g => new { Source = g.Key, Converted = g.Count() })
@@ -195,7 +240,9 @@ public sealed class AnalyticsService(AppDbContext db) : IAnalyticsService
             .Select(x =>
             {
                 var converted = convertedMap.GetValueOrDefault(x.Source, 0);
-                var rate = x.LeadsCount == 0 ? 0.0 : (double)converted / x.LeadsCount;
+                var rate = x.LeadsCount == 0
+                    ? 0.0
+                    : Math.Round((double)converted / x.LeadsCount, 4, MidpointRounding.AwayFromZero);
                 return new ConversionByPortalDto
                 {
                     Source = x.Source,
@@ -256,7 +303,9 @@ public sealed class AnalyticsService(AppDbContext db) : IAnalyticsService
             .Select(x =>
             {
                 var conv = x.SellerId == null ? convertedNoSeller : map.GetValueOrDefault(x.SellerId.Value, 0);
-                var rate = x.LeadsCount == 0 ? 0.0 : (double)conv / x.LeadsCount;
+                var rate = x.LeadsCount == 0
+                    ? 0.0
+                    : Math.Round((double)conv / x.LeadsCount, 4, MidpointRounding.AwayFromZero);
                 return new ConversionBySellerDto
                 {
                     SellerId = x.SellerId,
@@ -301,16 +350,19 @@ public sealed class AnalyticsService(AppDbContext db) : IAnalyticsService
         {
             TotalLeads = total,
             ConvertedLeads = converted,
-            ConversionRate = total == 0 ? 0.0 : (double)converted / total
+            ConversionRate = total == 0
+                ? 0.0
+                : Math.Round((double)converted / total, 4, MidpointRounding.AwayFromZero)
         };
     }
 
     public async Task<IReadOnlyList<MonthlySalesPointDto>> GetMonthlySalesAsync(Guid companyId, int months, CancellationToken ct = default)
     {
         var take = Math.Clamp(months, 1, 60);
-        var now = DateTime.UtcNow;
-        var start = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc).AddMonths(-(take - 1));
-        var end = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc).AddMonths(1);
+        var (nowYear, nowMonth) = GetNowYearMonthInAnalyticsTz();
+        var (thisMonthStart, nextMonthStart) = GetMonthRange(nowYear, nowMonth);
+        var start = thisMonthStart.AddMonths(-(take - 1));
+        var end = nextMonthStart;
         var companyUserIds = CompanyUserIds(companyId);
 
         var grouped = await _db.Sales.AsNoTracking()
