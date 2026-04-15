@@ -10,5 +10,5 @@ public sealed class CompanyPatchDto
     public string? Phone { get; set; }
     public string? Email { get; set; }
     public string? Website { get; set; }
+    public bool? HasSdr { get; set; }
 }
-

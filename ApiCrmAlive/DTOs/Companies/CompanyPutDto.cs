@@ -10,5 +10,5 @@ public sealed class CompanyPutDto
     public string Phone { get; set; } = default!;
     public string Email { get; set; } = default!;
     public string? Website { get; set; }
+    public bool HasSdr { get; set; } = false;
 }
-

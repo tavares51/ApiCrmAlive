@@ -20,6 +20,7 @@ public static class CompanyMapper
             Phone = c.Phone,
             Email = c.Email,
             Website = c.Website,
+            HasSdr = c.HasSdr,
             CreatedAt = c.CreatedAt,
             UpdatedAt = c.UpdatedAt,
             UpdatedBy = c.UpdatedBy
@@ -39,6 +40,7 @@ public static class CompanyMapper
             Phone = dto.Phone.Trim(),
             Email = dto.Email.Trim().ToLowerInvariant(),
             Website = string.IsNullOrWhiteSpace(dto.Website) ? null : dto.Website.Trim(),
+            HasSdr = dto.HasSdr,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
             UpdatedBy = updatedBy
@@ -55,6 +57,7 @@ public static class CompanyMapper
         entity.Phone = dto.Phone.Trim();
         entity.Email = dto.Email.Trim().ToLowerInvariant();
         entity.Website = string.IsNullOrWhiteSpace(dto.Website) ? null : dto.Website.Trim();
+        entity.HasSdr = dto.HasSdr;
         entity.UpdatedAt = DateTime.UtcNow;
         entity.UpdatedBy = updatedBy;
     }
@@ -84,6 +87,9 @@ public static class CompanyMapper
 
         if (dto.Website != null)
             entity.Website = string.IsNullOrWhiteSpace(dto.Website) ? null : dto.Website.Trim();
+
+        if (dto.HasSdr.HasValue)
+            entity.HasSdr = dto.HasSdr.Value;
 
         entity.UpdatedAt = DateTime.UtcNow;
         entity.UpdatedBy = updatedBy;
@@ -124,4 +130,3 @@ public static class CompanyMapper
         }
     }
 }
-

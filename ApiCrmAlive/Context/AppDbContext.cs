@@ -40,6 +40,7 @@ namespace ApiCrmAlive.Context
             {
                 c.HasIndex(x => x.Cnpj).IsUnique();
                 c.HasIndex(x => x.Name);
+                c.Property(x => x.HasSdr).HasDefaultValue(false);
             });
 
             modelBuilder.Entity<User>(u =>

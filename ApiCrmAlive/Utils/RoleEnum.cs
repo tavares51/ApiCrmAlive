@@ -2,6 +2,6 @@
 {
     public enum RoleEnum
     {
-        vendedor, admin, gerente
+        vendedor, admin, gerente, sdr
     }
 }

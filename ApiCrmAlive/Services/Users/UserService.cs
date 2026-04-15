@@ -12,7 +12,7 @@ namespace ApiCrmAlive.Services.Users;
 public class UserService(IUserRepository repo,
                    IUnitOfWork uow) : IUserService
 {
-    private static readonly HashSet<string> AllowedRoles = [.. new[] { "admin", "gerente", "vendedor" }];
+    private static readonly HashSet<string> AllowedRoles = [.. new[] { "admin", "gerente", "vendedor", "sdr" }];
 
     public async Task<UserDto> CreateAsync(UserCreateDto input, Guid updatedBy, CancellationToken ct = default)
     {
@@ -20,7 +20,7 @@ public class UserService(IUserRepository repo,
             throw new InvalidOperationException("E-mail já cadastrado.");
 
         var role = string.IsNullOrWhiteSpace(input.Role) ? "vendedor" : input.Role!.Trim().ToLowerInvariant();
-        if (!AllowedRoles.Contains(role)) throw new ArgumentException("Role inválida. Use admin, gerente ou vendedor.");
+        if (!AllowedRoles.Contains(role)) throw new ArgumentException("Role inválida. Use admin, gerente, vendedor ou sdr.");
 
         AuthHelper.CreatePasswordHash(input.Password, out var hash, out var salt);
 
@@ -53,7 +53,7 @@ public class UserService(IUserRepository repo,
         if (!string.IsNullOrWhiteSpace(input.Role))
         {
             var role = input.Role.Trim().ToLowerInvariant();
-            if (!AllowedRoles.Contains(role)) throw new ArgumentException("Role inválida. Use admin, gerente ou vendedor.");
+            if (!AllowedRoles.Contains(role)) throw new ArgumentException("Role inválida. Use admin, gerente, vendedor ou sdr.");
             user.Role = role;
         }
 

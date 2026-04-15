@@ -11,8 +11,8 @@ public sealed class CompanyDto
     public string Phone { get; set; } = default!;
     public string Email { get; set; } = default!;
     public string? Website { get; set; }
+    public bool HasSdr { get; set; } = false;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public Guid UpdatedBy { get; set; }
 }
-

@@ -42,7 +42,7 @@ public class LeadsController(ILeadService service, AppDbContext ctx) : Controlle
     }
 
     [HttpPost("auto")]
-    [SwaggerOperation(Summary = "Cria um lead (com validação + fila de vendedores)", Description = "Verifica duplicidade por telefone e atribui automaticamente um vendedor (round-robin).")]
+    [SwaggerOperation(Summary = "Cria um lead (com validação + fila de distribuição)", Description = "Verifica duplicidade por telefone e atribui automaticamente por round-robin (SDR quando habilitado na empresa; caso contrário, vendedor).")]
     [SwaggerResponse(201, "Lead criado com sucesso", typeof(LeadDto))]
     [SwaggerResponse(409, "Já existe lead com esse telefone")]
     public async Task<IActionResult> CreateAuto([FromBody] LeadCreateDto dto, CancellationToken ct)

@@ -39,6 +39,9 @@ public sealed class Company
     public string? Website { get; set; }
 
     [Required]
+    public bool HasSdr { get; set; } = false;
+
+    [Required]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     [Required]
@@ -47,4 +50,3 @@ public sealed class Company
     [Required]
     public Guid UpdatedBy { get; set; }
 }
-
