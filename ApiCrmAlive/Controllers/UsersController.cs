@@ -52,6 +52,7 @@ public class UsersController(IUserService service) : ControllerBase
 
     /// <summary>POST /api/users</summary>
     [HttpPost]
+    [AllowAnonymous]
     [Consumes("application/json")]
     [SwaggerOperation(Summary = "Cria um novo usuário")]
     [SwaggerResponse(201, "Usuário criado", typeof(UserDto))]
