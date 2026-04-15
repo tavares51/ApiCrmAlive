@@ -78,25 +78,6 @@ builder.Configuration.AddEnvironmentVariables();
 builder.Services.AddHttpClient();
 
 string? cs = builder.Configuration.GetConnectionString("DefaultConnection");
-if (string.IsNullOrWhiteSpace(cs))
-{
-    var dbHost = Environment.GetEnvironmentVariable("DB_HOST");
-    var dbPort = Environment.GetEnvironmentVariable("DB_PORT") ?? "5432";
-    var dbName = Environment.GetEnvironmentVariable("DB_NAME");
-    var dbUser = Environment.GetEnvironmentVariable("DB_USER");
-    var dbPass = Environment.GetEnvironmentVariable("DB_PASSWORD");
-
-    if (string.IsNullOrWhiteSpace(dbHost) ||
-        string.IsNullOrWhiteSpace(dbName) ||
-        string.IsNullOrWhiteSpace(dbUser) ||
-        string.IsNullOrWhiteSpace(dbPass))
-    {
-        throw new InvalidOperationException(
-            "Connection string 'DefaultConnection' ausente e variáveis de ambiente DB_* não definidas.");
-    }
-
-    cs = $"Host={dbHost};Port={dbPort};Database={dbName};Username={dbUser};Password={dbPass};Ssl Mode=Require;Trust Server Certificate=true";
-}
 
 // In Development, include provider error details (e.g., which column violated constraints).
 // Keep it off elsewhere to avoid leaking sensitive data.
