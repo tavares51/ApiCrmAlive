@@ -9,8 +9,6 @@ WORKDIR /app
 ENV ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
 # Apply EF Core migrations automatically on boot (implemented in Program.cs).
 # Override at deploy-time if you don't want this behavior.
-ENV APPLY_MIGRATIONS=true
-ENV APPLY_MIGRATIONS_STRICT=true
 EXPOSE 8080
 
 # Run as non-root in the final image.

@@ -261,11 +261,10 @@ if (string.Equals(Environment.GetEnvironmentVariable("APPLY_MIGRATIONS"), "true"
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
     var strictMigrations =
-        app.Environment.IsDevelopment() ||
         string.Equals(Environment.GetEnvironmentVariable("APPLY_MIGRATIONS_STRICT"), "true", StringComparison.OrdinalIgnoreCase);
 
-    // If the app was built without migrations compiled into the assembly, Migrate() will be a no-op.
-    // In strict mode, fail fast so deployments don't come up with an uninitialized schema.
+    // If the app was built without migrations compiled into the assembly, Migrate() is a no-op.
+    // In strict mode, fail fast. Otherwise, fallback to EnsureCreated to avoid crash loops.
     var knownMigrations = db.Database.GetMigrations().ToList();
     if (knownMigrations.Count == 0)
     {
@@ -273,32 +272,44 @@ if (string.Equals(Environment.GetEnvironmentVariable("APPLY_MIGRATIONS"), "true"
                   "Ensure the Migrations folder is present and committed/built.";
         Console.Error.WriteLine($"[migrations] {msg}");
         if (strictMigrations) throw new InvalidOperationException(msg);
-    }
 
-    Exception? lastError = null;
-    for (var attempt = 1; attempt <= 10; attempt++)
-    {
         try
         {
-            db.Database.Migrate();
-            lastError = null;
-            break;
-        }
-        catch (Exception ex) when (attempt < 10)
-        {
-            lastError = ex;
-            Thread.Sleep(TimeSpan.FromSeconds(2));
+            var created = db.Database.EnsureCreated();
+            Console.WriteLine($"[migrations] Fallback EnsureCreated executed. Database created: {created}.");
         }
         catch (Exception ex)
         {
-            lastError = ex;
+            Console.Error.WriteLine($"[migrations] EnsureCreated fallback failed: {ex.GetType().Name}: {ex.Message}");
         }
     }
-
-    if (lastError is not null)
+    else
     {
-        Console.Error.WriteLine($"[migrations] Failed after retries: {lastError.GetType().Name}: {lastError.Message}");
-        if (strictMigrations) throw lastError;
+        Exception? lastError = null;
+        for (var attempt = 1; attempt <= 10; attempt++)
+        {
+            try
+            {
+                db.Database.Migrate();
+                lastError = null;
+                break;
+            }
+            catch (Exception ex) when (attempt < 10)
+            {
+                lastError = ex;
+                Thread.Sleep(TimeSpan.FromSeconds(2));
+            }
+            catch (Exception ex)
+            {
+                lastError = ex;
+            }
+        }
+
+        if (lastError is not null)
+        {
+            Console.Error.WriteLine($"[migrations] Failed after retries: {lastError.GetType().Name}: {lastError.Message}");
+            if (strictMigrations) throw lastError;
+        }
     }
 }
 
