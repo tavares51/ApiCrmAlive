@@ -2,6 +2,7 @@ using ApiCrmAlive.DTOs.Analytics;
 using ApiCrmAlive.Context;
 using ApiCrmAlive.Services.Analytics;
 using ApiCrmAlive.Utils;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Swashbuckle.AspNetCore.Annotations;
 
@@ -17,38 +18,42 @@ public sealed class AnalyticsController(IAnalyticsService service, AppDbContext 
 
     // KPIs
     [HttpGet("kpis")]
-    [SwaggerOperation(Summary = "KPIs do dashboard", Description = "Retorna KPIs agregados (leads, clientes, estoque, receita mensal e dias médios em estoque).")]
+    [AllowAnonymous]
+    [SwaggerOperation(Summary = "KPIs do dashboard", Description = "Retorna total de leads, clientes, estoque, receita mensal, médias de estoque e vendedor com mais vendas no mês.")]
     [SwaggerResponse(200, "KPIs retornados com sucesso", typeof(KpisDto))]
     public async Task<IActionResult> GetKpis(
+        [FromQuery] Guid? sellerId,
         [FromQuery] int? year,
         [FromQuery] int? month,
-        [FromQuery] int activeCustomerDays = 365,
         CancellationToken ct = default)
     {
         var companyId = await User.GetCompanyIdOrThrowAsync(_ctx, ct);
-        return Ok(await _service.GetKpisAsync(companyId, year, month, activeCustomerDays, ct));
+        return Ok(await _service.GetKpisAsync(companyId, sellerId, year, month, ct));
     }
 
     // Charts
     [HttpGet("funnel")]
-    [SwaggerOperation(Summary = "Funil de vendas", Description = "Contagem de leads por status (para funil).")]
+    [AllowAnonymous]
+    [SwaggerOperation(Summary = "Funil de vendas", Description = "Contagem de leads por status (filtro opcional por vendedor).")]
     [SwaggerResponse(200, "Dados do funil retornados com sucesso", typeof(IEnumerable<FunnelStageDto>))]
-    public async Task<IActionResult> GetFunnel([FromQuery] DateTime? from, [FromQuery] DateTime? to, CancellationToken ct)
+    public async Task<IActionResult> GetFunnel([FromQuery] Guid? sellerId, CancellationToken ct)
     {
         var companyId = await User.GetCompanyIdOrThrowAsync(_ctx, ct);
-        return Ok(await _service.GetSalesFunnelAsync(companyId, from, to, ct));
+        return Ok(await _service.GetSalesFunnelAsync(companyId, sellerId, ct));
     }
 
     [HttpGet("leads-by-seller")]
+    [AllowAnonymous]
     [SwaggerOperation(Summary = "Leads por vendedor", Description = "Agrupa leads por vendedor.")]
     [SwaggerResponse(200, "Dados retornados com sucesso", typeof(IEnumerable<LeadsBySellerDto>))]
-    public async Task<IActionResult> GetLeadsBySeller([FromQuery] DateTime? from, [FromQuery] DateTime? to, CancellationToken ct)
+    public async Task<IActionResult> GetLeadsBySeller(CancellationToken ct)
     {
         var companyId = await User.GetCompanyIdOrThrowAsync(_ctx, ct);
-        return Ok(await _service.GetLeadsBySellerAsync(companyId, from, to, ct));
+        return Ok(await _service.GetLeadsBySellerAsync(companyId, ct));
     }
 
     [HttpGet("top-sellers")]
+    [AllowAnonymous]
     [SwaggerOperation(Summary = "Vendedor do mes (Top 5)", Description = "Top vendedores do mes por receita (default top 5).")]
     [SwaggerResponse(200, "Ranking retornado com sucesso", typeof(IEnumerable<TopSellerDto>))]
     public async Task<IActionResult> GetTopSellersOfMonth(
@@ -62,15 +67,17 @@ public sealed class AnalyticsController(IAnalyticsService service, AppDbContext 
     }
 
     [HttpGet("conversion-by-portal")]
+    [AllowAnonymous]
     [SwaggerOperation(Summary = "Conversao por portal", Description = "Taxa de conversao por fonte do lead (Lead.Source).")]
     [SwaggerResponse(200, "Dados retornados com sucesso", typeof(IEnumerable<ConversionByPortalDto>))]
-    public async Task<IActionResult> GetConversionByPortal([FromQuery] DateTime? from, [FromQuery] DateTime? to, CancellationToken ct)
+    public async Task<IActionResult> GetConversionByPortal(CancellationToken ct)
     {
         var companyId = await User.GetCompanyIdOrThrowAsync(_ctx, ct);
-        return Ok(await _service.GetConversionByPortalAsync(companyId, from, to, ct));
+        return Ok(await _service.GetConversionByPortalAsync(companyId, ct));
     }
 
     [HttpGet("conversion-by-seller")]
+    [AllowAnonymous]
     [SwaggerOperation(Summary = "Taxa de conversao por vendedor", Description = "Taxa de conversao (leads atribuídos vs leads com venda).")]
     [SwaggerResponse(200, "Dados retornados com sucesso", typeof(IEnumerable<ConversionBySellerDto>))]
     public async Task<IActionResult> GetConversionBySeller([FromQuery] DateTime? from, [FromQuery] DateTime? to, CancellationToken ct)
@@ -80,6 +87,7 @@ public sealed class AnalyticsController(IAnalyticsService service, AppDbContext 
     }
 
     [HttpGet("lead-conversion-summary")]
+    [AllowAnonymous]
     [SwaggerOperation(Summary = "Conversao de leads (resumo)", Description = "Total de leads, leads convertidos e taxa de conversao.")]
     [SwaggerResponse(200, "Dados retornados com sucesso", typeof(LeadConversionSummaryDto))]
     public async Task<IActionResult> GetLeadConversionSummary([FromQuery] DateTime? from, [FromQuery] DateTime? to, CancellationToken ct)
@@ -89,6 +97,7 @@ public sealed class AnalyticsController(IAnalyticsService service, AppDbContext 
     }
 
     [HttpGet("monthly-sales")]
+    [AllowAnonymous]
     [SwaggerOperation(Summary = "Vendas mensais", Description = "Serie mensal de vendas (quantidade e receita).")]
     [SwaggerResponse(200, "Dados retornados com sucesso", typeof(IEnumerable<MonthlySalesPointDto>))]
     public async Task<IActionResult> GetMonthlySales([FromQuery] int months = 12, CancellationToken ct = default)
@@ -98,6 +107,7 @@ public sealed class AnalyticsController(IAnalyticsService service, AppDbContext 
     }
 
     [HttpGet("vehicles-by-status")]
+    [AllowAnonymous]
     [SwaggerOperation(Summary = "Veiculos por status", Description = "Quantidade de veiculos agrupados por status.")]
     [SwaggerResponse(200, "Dados retornados com sucesso", typeof(IEnumerable<VehiclesByStatusDto>))]
     public async Task<IActionResult> GetVehiclesByStatus(CancellationToken ct)

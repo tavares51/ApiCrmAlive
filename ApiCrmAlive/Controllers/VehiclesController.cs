@@ -5,16 +5,39 @@ using ApiCrmAlive.Services.Vehicles;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Swashbuckle.AspNetCore.Annotations;
+using System.Text.Json;
 
 namespace ApiCrmAlive.Controllers;
 
 [ApiController]
 [Route("api/vehicles")]
+[Route("api/veiculo")]
 [Produces("application/json")]
 public class VehiclesController(IVehicleService service, ICustomerRepository customers, IFileUploader uploader) : ControllerBase
 {
     private readonly ICustomerRepository _customers = customers;
     private readonly IFileUploader _uploader = uploader;
+
+    private Guid GetActorUserIdOrThrow() => User.GetUserIdOrThrow();
+
+    private async Task ValidatePreviousOwnerAsync(Guid? previousOwnerId, CancellationToken ct)
+    {
+        if (!previousOwnerId.HasValue)
+            return;
+
+        if (previousOwnerId.Value == Guid.Empty)
+        {
+            ModelState.AddModelError("PreviousOwnerId", "PreviousOwnerId inválido.");
+            return;
+        }
+
+        var exists = await _customers.Query()
+            .AsNoTracking()
+            .AnyAsync(c => c.Id == previousOwnerId.Value, ct);
+
+        if (!exists)
+            ModelState.AddModelError("PreviousOwnerId", "Cliente informado em PreviousOwnerId não existe.");
+    }
 
     /// <summary>GET /api/vehicles</summary>
     [HttpGet]
@@ -60,28 +83,117 @@ public class VehiclesController(IVehicleService service, ICustomerRepository cus
     [SwaggerResponse(409, "Placa já cadastrada")]
     public async Task<ActionResult<VehicleDto>> Create([FromBody] VehicleCreateDto dto, CancellationToken ct)
     {
-        if (dto.PreviousOwnerId.HasValue)
-        {
-            if (dto.PreviousOwnerId.Value == Guid.Empty)
-            {
-                ModelState.AddModelError(nameof(dto.PreviousOwnerId), "PreviousOwnerId inválido.");
-                return ValidationProblem(ModelState);
-            }
+        await ValidatePreviousOwnerAsync(dto.PreviousOwnerId, ct);
+        if (!ModelState.IsValid)
+            return ValidationProblem(ModelState);
 
-            var exists = await _customers.Query()
-                .AsNoTracking()
-                .AnyAsync(c => c.Id == dto.PreviousOwnerId.Value, ct);
-
-            if (!exists)
-            {
-                ModelState.AddModelError(nameof(dto.PreviousOwnerId), "Cliente informado em PreviousOwnerId não existe.");
-                return ValidationProblem(ModelState);
-            }
-        }
-
-        var updatedBy = Guid.NewGuid(); // substitua pelo usuário autenticado
+        var updatedBy = GetActorUserIdOrThrow();
         var created = await service.CreateAsync(dto, updatedBy, ct);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+    }
+
+    /// <summary>POST /api/vehicles (multipart/form-data)</summary>
+    [HttpPost]
+    [ApiExplorerSettings(IgnoreApi = true)]
+    [Consumes("multipart/form-data")]
+    [SwaggerOperation(Summary = "Cria um veículo (form-data) com fotos opcionais")]
+    [SwaggerResponse(201, "Criado", typeof(VehicleDto))]
+    [SwaggerResponse(400, "Payload inválido")]
+    [SwaggerResponse(409, "Placa já cadastrada")]
+    public async Task<ActionResult<VehicleDto>> CreateForm(
+        [FromForm] VehicleCreateDto dto,
+        [FromForm] List<IFormFile>? photos,
+        CancellationToken ct)
+    {
+        await ValidatePreviousOwnerAsync(dto.PreviousOwnerId, ct);
+        if (!ModelState.IsValid)
+            return ValidationProblem(ModelState);
+
+        var updatedBy = GetActorUserIdOrThrow();
+        var created = await service.CreateAsync(dto, updatedBy, ct);
+
+        var photoFiles = (photos ?? [])
+            .Where(p => p is { Length: > 0 })
+            .ToList();
+
+        if (photoFiles.Count == 0)
+            return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+
+        var objectNames = await _uploader.UploadAsync(photoFiles);
+        if (objectNames.Count == 0)
+            return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+
+        var updated = await service.PatchAsync(
+            created.Id,
+            new VehicleUpdateDto { Photos = objectNames },
+            updatedBy,
+            ct);
+
+        return CreatedAtAction(nameof(GetById), new { id = updated.Id }, updated);
+    }
+
+    /// <summary>POST /api/vehicles/with-photos</summary>
+    [HttpPost("with-photos")]
+    [Consumes("multipart/form-data")]
+    [SwaggerOperation(
+        Summary = "Cria um veículo com fotos",
+        Description = "Envie o campo 'vehicle' com o JSON do VehicleCreateDto e, opcionalmente, arquivos em 'photos'.")]
+    [SwaggerResponse(201, "Criado", typeof(VehicleDto))]
+    [SwaggerResponse(400, "Payload inválido")]
+    [SwaggerResponse(409, "Placa já cadastrada")]
+    public async Task<ActionResult<VehicleDto>> CreateWithPhotos([FromForm] VehicleCreateWithPhotosFormDto form, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(form.Vehicle))
+        {
+            ModelState.AddModelError(nameof(form.Vehicle), "Campo 'vehicle' é obrigatório.");
+            return ValidationProblem(ModelState);
+        }
+
+        VehicleCreateDto? dto;
+        try
+        {
+            dto = JsonSerializer.Deserialize<VehicleCreateDto>(
+                form.Vehicle,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch (JsonException ex)
+        {
+            ModelState.AddModelError(nameof(form.Vehicle), $"JSON inválido: {ex.Message}");
+            return ValidationProblem(ModelState);
+        }
+
+        if (dto is null)
+        {
+            ModelState.AddModelError(nameof(form.Vehicle), "Não foi possível desserializar o JSON do veículo.");
+            return ValidationProblem(ModelState);
+        }
+
+        TryValidateModel(dto);
+        await ValidatePreviousOwnerAsync(dto.PreviousOwnerId, ct);
+        if (!ModelState.IsValid)
+            return ValidationProblem(ModelState);
+
+        var updatedBy = GetActorUserIdOrThrow();
+        var created = await service.CreateAsync(dto, updatedBy, ct);
+
+        var photoFiles = (form.Photos ?? [])
+            .Where(p => p is { Length: > 0 })
+            .ToList();
+
+        if (photoFiles.Count == 0)
+            return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+
+        var objectNames = await _uploader.UploadAsync(photoFiles);
+        if (objectNames.Count == 0)
+            return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+
+        var updated = await service.PatchAsync(
+            created.Id,
+            new VehicleUpdateDto { Photos = objectNames },
+            updatedBy,
+            ct);
+
+        return CreatedAtAction(nameof(GetById), new { id = updated.Id }, updated);
     }
 
     /// <summary>PUT /api/vehicles/:id</summary>
@@ -92,26 +204,11 @@ public class VehiclesController(IVehicleService service, ICustomerRepository cus
     [SwaggerResponse(404, "Não encontrado")]
     public async Task<ActionResult<VehicleDto>> Update(Guid id, [FromBody] VehiclePutDto dto, CancellationToken ct)
     {
-        if (dto.PreviousOwnerId.HasValue)
-        {
-            if (dto.PreviousOwnerId.Value == Guid.Empty)
-            {
-                ModelState.AddModelError(nameof(dto.PreviousOwnerId), "PreviousOwnerId inválido.");
-                return ValidationProblem(ModelState);
-            }
+        await ValidatePreviousOwnerAsync(dto.PreviousOwnerId, ct);
+        if (!ModelState.IsValid)
+            return ValidationProblem(ModelState);
 
-            var exists = await _customers.Query()
-                .AsNoTracking()
-                .AnyAsync(c => c.Id == dto.PreviousOwnerId.Value, ct);
-
-            if (!exists)
-            {
-                ModelState.AddModelError(nameof(dto.PreviousOwnerId), "Cliente informado em PreviousOwnerId não existe.");
-                return ValidationProblem(ModelState);
-            }
-        }
-
-        var updatedBy = Guid.NewGuid(); // substitua pelo usuário autenticado
+        var updatedBy = GetActorUserIdOrThrow();
         return Ok(await service.UpdateAsync(id, dto, updatedBy, ct));
     }
 
@@ -123,26 +220,11 @@ public class VehiclesController(IVehicleService service, ICustomerRepository cus
     [SwaggerResponse(404, "Não encontrado")]
     public async Task<ActionResult<VehicleDto>> Patch(Guid id, [FromBody] VehicleUpdateDto dto, CancellationToken ct)
     {
-        if (dto.PreviousOwnerId.HasValue)
-        {
-            if (dto.PreviousOwnerId.Value == Guid.Empty)
-            {
-                ModelState.AddModelError(nameof(dto.PreviousOwnerId), "PreviousOwnerId inválido.");
-                return ValidationProblem(ModelState);
-            }
+        await ValidatePreviousOwnerAsync(dto.PreviousOwnerId, ct);
+        if (!ModelState.IsValid)
+            return ValidationProblem(ModelState);
 
-            var exists = await _customers.Query()
-                .AsNoTracking()
-                .AnyAsync(c => c.Id == dto.PreviousOwnerId.Value, ct);
-
-            if (!exists)
-            {
-                ModelState.AddModelError(nameof(dto.PreviousOwnerId), "Cliente informado em PreviousOwnerId não existe.");
-                return ValidationProblem(ModelState);
-            }
-        }
-
-        var updatedBy = Guid.NewGuid(); // substitua pelo usuário autenticado
+        var updatedBy = GetActorUserIdOrThrow();
         return Ok(await service.PatchAsync(id, dto, updatedBy, ct));
     }
 
@@ -152,7 +234,7 @@ public class VehiclesController(IVehicleService service, ICustomerRepository cus
     [SwaggerResponse(204, "Atualizado")]
     public async Task<IActionResult> UpdateStatus(Guid id, [FromQuery] VehicleStatusEnum status, CancellationToken ct)
     {
-        var updatedBy = Guid.NewGuid();
+        var updatedBy = GetActorUserIdOrThrow();
         await service.UpdateStatusAsync(id, status, updatedBy, ct);
         return NoContent();
     }
@@ -167,15 +249,4 @@ public class VehiclesController(IVehicleService service, ICustomerRepository cus
         return NoContent();
     }
 
-    /// <summary>GET /api/vehicles/:id/photos</summary>
-    [HttpGet("{id:guid}/photos")]
-    [SwaggerOperation(Summary = "Obtém fotos do veículo")]
-    [SwaggerResponse(200, "Fotos do veículo", typeof(IEnumerable<string>))]
-    [SwaggerResponse(404, "Veículo não encontrado")]
-    public async Task<ActionResult<IEnumerable<string>>> GetPhotos(Guid id, CancellationToken ct)
-    {
-        var objectNames = await service.GetPhotosAsync(id, ct);
-        var urls = await _uploader.GetUrlsAsync(objectNames);
-        return Ok(urls);
-    }
 }

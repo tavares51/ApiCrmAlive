@@ -37,10 +37,10 @@ curl --request GET \
 
 ################################################################################
 # 2) Funil (Leads por Status)
-# from/to opcionais; "to" e exclusivo (< to)
+# filtro opcional por sellerId
 ################################################################################
 curl --request GET \
-  --url "$BASE_URL/api/analytics/funnel?from=2026-04-01T00:00:00Z&to=2026-05-01T00:00:00Z" \
+  --url "$BASE_URL/api/analytics/funnel" \
   --header "Authorization: Bearer $TOKEN"
 
 # 200 (exemplo)
@@ -83,7 +83,7 @@ curl --request GET \
 # 5) Conversao por Portal (Lead.Source)
 ################################################################################
 curl --request GET \
-  --url "$BASE_URL/api/analytics/conversion-by-portal?from=2026-04-01T00:00:00Z&to=2026-05-01T00:00:00Z" \
+  --url "$BASE_URL/api/analytics/conversion-by-portal" \
   --header "Authorization: Bearer $TOKEN"
 
 # 200 (exemplo)
@@ -147,4 +147,3 @@ curl --request GET \
 #   { "status": 2, "count": 2 },
 #   { "status": 3, "count": 7 }
 # ]
-

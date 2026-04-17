@@ -151,8 +151,8 @@ builder.Services.AddHttpClient<IEvolutionWhatsappService, EvolutionWhatsappServi
 });
 
 builder.Services.AddSingleton<VehicleMapper>();
-builder.Services.Configure<MinioOptions>(builder.Configuration.GetSection("Minio"));
-builder.Services.AddSingleton<IFileUploader, MinioFileUploader>();
+builder.Services.Configure<SupabaseStorageOptions>(builder.Configuration.GetSection("Supabase"));
+builder.Services.AddSingleton<IFileUploader, SupabaseFileUploader>();
 builder.Services.AddControllers()
     .AddJsonOptions(o =>
     {

@@ -67,42 +67,50 @@ public sealed class AnalyticsService : IAnalyticsService
             .Where(l => l.CompanyId == companyId || (l.CompanyId == null && userIds.Contains(l.UpdatedBy)));
     }
 
-    public async Task<KpisDto> GetKpisAsync(Guid companyId, int? year, int? month, int activeCustomerDays, CancellationToken ct = default)
+    public async Task<KpisDto> GetKpisAsync(Guid companyId, Guid? sellerId, int? year, int? month, CancellationToken ct = default)
     {
         var nowUtc = DateTime.UtcNow;
         var (nowYear, nowMonth) = GetNowYearMonthInAnalyticsTz();
         var y = year ?? nowYear;
         var m = month ?? nowMonth;
         var (monthStart, nextMonthStart) = GetMonthRange(y, m);
-        var activeCutoff = nowUtc.AddDays(-Math.Abs(activeCustomerDays));
+        var daysInMonth = DateTime.DaysInMonth(y, m);
 
         var companyUserIds = CompanyUserIds(companyId);
-        var leads = CompanyLeads(companyId);
+        var leads = _db.Leads.AsNoTracking()
+            .AsQueryable();
+        var scopedUserIds = companyUserIds.AsQueryable();
+
+        if (sellerId.HasValue)
+        {
+            leads = leads.Where(l => l.SellerId == sellerId.Value);
+            scopedUserIds = scopedUserIds.Where(id => id == sellerId.Value);
+        }
 
         // IMPORTANT: A single DbContext instance cannot execute multiple operations concurrently.
         // Keep these sequential (or use separate contexts via IDbContextFactory) to avoid 409/InvalidOperationException.
         var totalLeads = await leads.CountAsync(ct);
 
-        // No "IsActive" flag in Customer. Define "active" as recently purchased or having any purchase history.
-        // Customer doesn't have CompanyId yet; scope by UpdatedBy (user belonging to company).
-        var activeCustomers = await _db.Customers.AsNoTracking()
-            .Where(c => companyUserIds.Contains(c.UpdatedBy))
-            .CountAsync(c => (c.LastPurchaseDate != null && c.LastPurchaseDate >= activeCutoff) || c.TotalPurchases > 0, ct);
+        var totalCustomers = await _db.Customers.AsNoTracking()
+            .Where(c => scopedUserIds.Contains(c.UpdatedBy))
+            .CountAsync(ct);
 
         var vehiclesInStock = await _db.Vehicles.AsNoTracking()
-            .Where(v => companyUserIds.Contains(v.UpdatedBy))
-            .CountAsync(v => v.Status == VehicleStatusEnum.Disponivel || v.Status == VehicleStatusEnum.Reservado, ct);
+            .CountAsync(v => v.Status != VehicleStatusEnum.Vendido, ct);
 
-        var monthlyRevenue = await _db.Sales.AsNoTracking()
-            .Where(s => companyUserIds.Contains(s.SellerId))
+        var monthlySales = _db.Sales.AsNoTracking()
+            .Where(s => scopedUserIds.Contains(s.SellerId))
             .Where(s => s.SaleDate >= monthStart && s.SaleDate < nextMonthStart)
+            .AsQueryable();
+
+        var monthlyRevenue = await monthlySales
             .SumAsync(s => (decimal?)s.SalePrice, ct);
 
         // Compute average "days in stock" for vehicles currently in stock, based on EntryDate.
         // Kept as in-memory to avoid provider-specific date arithmetic translation issues.
         var entryDates = await _db.Vehicles.AsNoTracking()
-            .Where(v => companyUserIds.Contains(v.UpdatedBy))
-            .Where(v => v.Status == VehicleStatusEnum.Disponivel || v.Status == VehicleStatusEnum.Reservado)
+            .Where(v => scopedUserIds.Contains(v.UpdatedBy))
+            .Where(v => v.Status != VehicleStatusEnum.Vendido)
             .Select(v => v.EntryDate)
             .ToListAsync(ct);
 
@@ -110,65 +118,74 @@ public sealed class AnalyticsService : IAnalyticsService
             ? 0.0
             : entryDates.Average(d => (nowUtc - DateTime.SpecifyKind(d, DateTimeKind.Utc)).TotalDays);
 
+        var dailyStockAverage = daysInMonth == 0
+            ? 0.0
+            : Math.Round((double)vehiclesInStock / daysInMonth, 2, MidpointRounding.AwayFromZero);
+
+        var topSellerQuery = from s in monthlySales
+                             join u in _db.Users.AsNoTracking() on s.SellerId equals u.Id
+                             group new { s, u } by new { s.SellerId, u.Name } into g
+                             orderby g.Count() descending, g.Sum(x => x.s.SalePrice) descending
+                             select new TopSellerDto
+                             {
+                                 SellerId = g.Key.SellerId,
+                                 SellerName = g.Key.Name,
+                                 SalesCount = g.Count(),
+                                 TotalRevenue = g.Sum(x => x.s.SalePrice)
+                             };
+
+        var topSeller = await topSellerQuery.FirstOrDefaultAsync(ct);
+
         return new KpisDto
         {
             TotalLeads = totalLeads,
-            ActiveCustomers = activeCustomers,
+            TotalCustomers = totalCustomers,
+            ActiveCustomers = totalCustomers,
             VehiclesInStock = vehiclesInStock,
             MonthlyRevenue = monthlyRevenue ?? 0m,
             AverageDaysInStock = avgDays,
+            DailyStockAverage = dailyStockAverage,
+            TopSellerOfMonth = topSeller,
+            SellerId = sellerId,
             Year = y,
             Month = m
         };
     }
 
-    public async Task<IReadOnlyList<FunnelStageDto>> GetSalesFunnelAsync(Guid companyId, DateTime? from, DateTime? to, CancellationToken ct = default)
+    public async Task<IReadOnlyList<FunnelStageDto>> GetSalesFunnelAsync(Guid companyId, Guid? sellerId, CancellationToken ct = default)
     {
-        var q = CompanyLeads(companyId).AsQueryable();
-        if (from.HasValue) q = q.Where(l => l.CreatedAt >= from.Value);
-        if (to.HasValue) q = q.Where(l => l.CreatedAt < to.Value);
+        _ = companyId;
+        var q = _db.Leads.AsNoTracking().AsQueryable();
+        if (sellerId.HasValue)
+            q = q.Where(l => l.SellerId == sellerId.Value);
 
-        var grouped = await q
+        return await q
             .GroupBy(l => l.Status)
-            .Select(g => new FunnelStageDto { Status = g.Key, Count = g.Count() })
+            .Select(g => new FunnelStageDto
+            {
+                Status = g.Key,
+                Count = g.Count()
+            })
             .ToListAsync(ct);
-
-        // Ensure stable ordering in the funnel.
-        var order = new[]
-        {
-            LeadStatusEnum.Novo,
-            LeadStatusEnum.EmNegociacao,
-            LeadStatusEnum.EmAgendamentos,
-            LeadStatusEnum.Convertido,
-            LeadStatusEnum.Perdido
-        };
-
-        return grouped
-            .OrderBy(x => Array.IndexOf(order, x.Status))
-            .ToList();
     }
 
-    public async Task<IReadOnlyList<LeadsBySellerDto>> GetLeadsBySellerAsync(Guid companyId, DateTime? from, DateTime? to, CancellationToken ct = default)
+    public async Task<IReadOnlyList<LeadsBySellerDto>> GetLeadsBySellerAsync(Guid companyId, CancellationToken ct = default)
     {
-        var q = CompanyLeads(companyId)
-            .Include(l => l.Seller)
-            .AsQueryable();
-
-        if (from.HasValue) q = q.Where(l => l.CreatedAt >= from.Value);
-        if (to.HasValue) q = q.Where(l => l.CreatedAt < to.Value);
-
-        var list = await q
-            .GroupBy(l => new { l.SellerId, SellerName = l.Seller != null ? l.Seller.Name : "Sem vendedor" })
-            .Select(g => new LeadsBySellerDto
+        var query =
+            from lead in _db.Leads.AsNoTracking()
+            join seller in _db.Users.AsNoTracking() on lead.SellerId equals seller.Id
+            group lead by new { seller.Id, seller.Name } into g
+            select new LeadsBySellerDto
             {
-                SellerId = g.Key.SellerId,
-                SellerName = g.Key.SellerName,
+                SellerId = g.Key.Id,
+                SellerName = g.Key.Name,
                 LeadsCount = g.Count()
-            })
-            .OrderByDescending(x => x.LeadsCount)
-            .ToListAsync(ct);
+            };
 
-        return list;
+        return await query
+            .OrderByDescending(x => x.LeadsCount)
+            .ThenBy(x => x.SellerName)
+            .ToListAsync(ct);
     }
 
     public async Task<IReadOnlyList<TopSellerDto>> GetTopSellersOfMonthAsync(Guid companyId, int? year, int? month, int take, CancellationToken ct = default)
@@ -198,61 +215,18 @@ public sealed class AnalyticsService : IAnalyticsService
         return await query.Take(top).ToListAsync(ct);
     }
 
-    public async Task<IReadOnlyList<ConversionByPortalDto>> GetConversionByPortalAsync(Guid companyId, DateTime? from, DateTime? to, CancellationToken ct = default)
+    public async Task<IReadOnlyList<ConversionByPortalDto>> GetConversionByPortalAsync(Guid companyId, CancellationToken ct = default)
     {
-        var companyUserIds = CompanyUserIds(companyId);
-        var leads = CompanyLeads(companyId).AsQueryable();
-        var sales = _db.Sales.AsNoTracking()
-            .Where(s => s.LeadId != null)
-            .Where(s => companyUserIds.Contains(s.SellerId))
-            .AsQueryable();
-
-        if (from.HasValue)
-        {
-            leads = leads.Where(l => l.CreatedAt >= from.Value);
-            sales = sales.Where(s => s.SaleDate >= from.Value);
-        }
-
-        if (to.HasValue)
-        {
-            leads = leads.Where(l => l.CreatedAt < to.Value);
-            sales = sales.Where(s => s.SaleDate < to.Value);
-        }
-
-        var leadsBySource = await leads
-            // Defensive normalization: avoid splitting the same source by trailing/leading spaces.
-            .GroupBy(l => l.Source.Trim())
-            .Select(g => new { Source = g.Key, LeadsCount = g.Count() })
-            .ToListAsync(ct);
-
-        var convertedBySource = await (from s in sales
-                                       join l in _db.Leads.AsNoTracking() on s.LeadId equals l.Id
-                                       where l.CompanyId == companyId || (l.CompanyId == null && companyUserIds.Contains(l.UpdatedBy))
-                                       select new { Source = l.Source.Trim(), LeadId = l.Id })
-            .Distinct()
-            .GroupBy(x => x.Source)
-            .Select(g => new { Source = g.Key, Converted = g.Count() })
-            .ToListAsync(ct);
-
-        var convertedMap = convertedBySource.ToDictionary(x => x.Source, x => x.Converted);
-
-        return leadsBySource
-            .Select(x =>
+        return await _db.Leads.AsNoTracking()
+            .Where(l => (int)l.Status == 3)
+            .GroupBy(l => l.Source)
+            .Select(g => new ConversionByPortalDto
             {
-                var converted = convertedMap.GetValueOrDefault(x.Source, 0);
-                var rate = x.LeadsCount == 0
-                    ? 0.0
-                    : Math.Round((double)converted / x.LeadsCount, 4, MidpointRounding.AwayFromZero);
-                return new ConversionByPortalDto
-                {
-                    Source = x.Source,
-                    LeadsCount = x.LeadsCount,
-                    ConvertedLeadsCount = converted,
-                    ConversionRate = rate
-                };
+                Source = g.Key,
+                LeadsCount = g.Count()
             })
             .OrderByDescending(x => x.LeadsCount)
-            .ToList();
+            .ToListAsync(ct);
     }
 
     public async Task<IReadOnlyList<ConversionBySellerDto>> GetConversionBySellerAsync(Guid companyId, DateTime? from, DateTime? to, CancellationToken ct = default)
@@ -396,11 +370,10 @@ public sealed class AnalyticsService : IAnalyticsService
 
     public async Task<IReadOnlyList<VehiclesByStatusDto>> GetVehiclesByStatusAsync(Guid companyId, CancellationToken ct = default)
     {
-        var companyUserIds = CompanyUserIds(companyId);
+        _ = companyId;
         return await _db.Vehicles.AsNoTracking()
             .GroupBy(v => v.Status)
             .Select(g => new VehiclesByStatusDto { Status = g.Key, Count = g.Count() })
-            .OrderBy(x => x.Status)
             .ToListAsync(ct);
     }
 }

@@ -24,7 +24,7 @@ public sealed class ApiExceptionMiddleware(
         }
         catch (Exception ex)
         {
-            var (status, title, detail) = MapToProblem(context, ex, env);
+            var (status, title, detail, errors) = MapToProblem(context, ex, env);
 
             if (status >= StatusCodes.Status500InternalServerError)
             {
@@ -37,11 +37,11 @@ public sealed class ApiExceptionMiddleware(
                     context.Request.Method, context.Request.Path, status, detail);
             }
 
-            await WriteProblemDetails(context, status, title, detail);
+            await WriteProblemDetails(context, status, title, detail, errors);
         }
     }
 
-    private static (int status, string title, string detail) MapToProblem(HttpContext ctx, Exception ex, IHostEnvironment env)
+    private static (int status, string title, string detail, List<string> errors) MapToProblem(HttpContext ctx, Exception ex, IHostEnvironment env)
     {
         var (status, title) = ex switch
         {
@@ -55,16 +55,13 @@ public sealed class ApiExceptionMiddleware(
 
         // EF Core often wraps the actionable database error in InnerException. Surface it in Development
         // to make debugging possible without reading server logs.
-        var detail = ex.Message;
-        if (env.IsDevelopment() && ex is DbUpdateException && ex.InnerException is not null)
-        {
-            detail = $"{ex.Message} InnerException: {ex.InnerException.Message}";
-        }
+        var errors = FlattenErrors(ex);
+        var detail = errors.FirstOrDefault() ?? ex.Message;
 
-        return (status, title, detail);
+        return (status, title, detail, errors);
     }
 
-    private static async Task WriteProblemDetails(HttpContext ctx, int status, string title, string detail)
+    private static async Task WriteProblemDetails(HttpContext ctx, int status, string title, string detail, List<string> errors)
     {
         if (ctx.Response.HasStarted)
             return;
@@ -76,11 +73,27 @@ public sealed class ApiExceptionMiddleware(
             Detail = detail,
             Instance = ctx.Request.Path
         };
+        problem.Extensions["errors"] = errors;
 
         ctx.Response.Clear();
         ctx.Response.StatusCode = status;
         ctx.Response.ContentType = MediaTypeNames.Application.Json;
 
         await ctx.Response.WriteAsync(JsonSerializer.Serialize(problem, JsonOptions));
+    }
+
+    private static List<string> FlattenErrors(Exception ex)
+    {
+        var errors = new List<string>();
+        Exception? current = ex;
+        while (current is not null)
+        {
+            if (!string.IsNullOrWhiteSpace(current.Message))
+                errors.Add(current.Message);
+
+            current = current.InnerException;
+        }
+
+        return errors.Count > 0 ? errors : [ex.ToString()];
     }
 }
