@@ -58,25 +58,32 @@ namespace ApiCrmAlive.Controllers
             return Ok(new { id = updated.Id, photos = freshUrls });
         }
 
-        [HttpDelete("veiculo/{id}/fotos/{fotoId}")]
-        [HttpDelete("vehicles/{id:guid}/photos/{fotoId}")]
+        [HttpDelete("veiculo/{id}/fotos/{*fotoId}")]
+        [HttpDelete("vehicles/{id:guid}/photos/{*fotoId}")]
         [SwaggerOperation(
             Summary = "Remove uma foto de uma entrada de veículo",
             Description = "Remove uma foto específica de uma entrada com base em seu ID ou hash no nome da URL."
         )]
         [SwaggerResponse(200, "Foto removida com sucesso")]
-        [SwaggerResponse(404, "Entrada não encontrada")]
+        [SwaggerResponse(404, "Entrada/foto não encontrada")]
         public async Task<IActionResult> DeletePhoto(Guid id, string fotoId, CancellationToken ct)
         {
+            if (string.IsNullOrWhiteSpace(fotoId))
+                return BadRequest("Informe o identificador da foto.");
+
+            var target = Uri.UnescapeDataString(fotoId);
             var current = (await _service.GetPhotosAsync(id, ct))
                 .Select(NormalizePhotoReference)
                 .Where(p => !string.IsNullOrWhiteSpace(p))
                 .ToList();
 
             var filtered = current
-                .Where(p => !p.Contains(fotoId, StringComparison.OrdinalIgnoreCase))
+                .Where(p => !MatchesPhotoReference(p, target))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
+
+            if (filtered.Count == current.Count)
+                return NotFound("Foto não encontrada para o veículo informado.");
 
             await _service.PatchAsync(
                 id,
@@ -210,6 +217,42 @@ namespace ApiCrmAlive.Controllers
 
             // URL externa/legada: preserva o valor original sem forçar caminho de objeto.
             return clean(normalizedValue);
+        }
+
+        private static bool MatchesPhotoReference(string stored, string requested)
+        {
+            if (string.IsNullOrWhiteSpace(stored) || string.IsNullOrWhiteSpace(requested))
+                return false;
+
+            var normalizedStored = NormalizePhotoReference(stored);
+            var normalizedRequested = NormalizePhotoReference(requested);
+
+            if (string.Equals(normalizedStored, normalizedRequested, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            if (normalizedStored.Contains(normalizedRequested, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            if (normalizedRequested.Contains(normalizedStored, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            var storedFileName = GetLastPathSegment(normalizedStored);
+            var requestedFileName = GetLastPathSegment(normalizedRequested);
+
+            return !string.IsNullOrWhiteSpace(storedFileName) &&
+                   string.Equals(storedFileName, requestedFileName, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string GetLastPathSegment(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return string.Empty;
+
+            var idx = value.LastIndexOf('/');
+            if (idx < 0 || idx + 1 >= value.Length)
+                return value;
+
+            return value[(idx + 1)..];
         }
 
         private static bool TryExtractObjectNameFromStoragePath(string path, out string objectName)

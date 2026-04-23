@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Security.Authentication;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
@@ -49,6 +50,15 @@ public sealed class SupabaseFileUploader : IFileUploader
             AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
             MaxConnectionsPerServer = 10
         };
+
+        if (_options.AllowInvalidTls)
+        {
+            handler.SslOptions.RemoteCertificateValidationCallback = (_, _, _, _) => true;
+            _logger.LogWarning(
+                "Supabase TLS validation is DISABLED via Supabase__AllowInvalidTls=true for {BaseUrl}. " +
+                "Use only in development/troubleshooting.",
+                _baseUrl);
+        }
 
         _http = new HttpClient(handler, disposeHandler: true)
         {
@@ -120,6 +130,17 @@ public sealed class SupabaseFileUploader : IFileUploader
                 }
                 catch (Exception ex) when (ex is HttpRequestException or IOException or TaskCanceledException)
                 {
+                    if (IsTlsCertificateError(ex))
+                    {
+                        _logger.LogWarning(
+                            ex,
+                            "Falha TLS ao enviar arquivo para Supabase em {BaseUrl}. " +
+                            "Verifique o certificado do host configurado em Supabase__Url. " +
+                            "Para ambiente de desenvolvimento, opcionalmente use Supabase__AllowInvalidTls=true.",
+                            _baseUrl);
+                        break;
+                    }
+
                     if (attempt == maxAttempts)
                     {
                         _logger.LogWarning(ex, "Erro ao enviar arquivo para Supabase Storage: {FileName}", file.FileName);
@@ -350,6 +371,23 @@ public sealed class SupabaseFileUploader : IFileUploader
     {
         var code = (int)statusCode;
         return code == 408 || code == 429 || code >= 500;
+    }
+
+    private static bool IsTlsCertificateError(Exception ex)
+    {
+        for (Exception? current = ex; current is not null; current = current.InnerException)
+        {
+            if (current is AuthenticationException)
+                return true;
+
+            if (!string.IsNullOrWhiteSpace(current.Message) &&
+                current.Message.Contains("certificate", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static string CleanObjectName(string objectName)

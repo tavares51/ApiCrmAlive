@@ -7,4 +7,5 @@ public sealed class SupabaseStorageOptions
     public string? Bucket { get; set; }
     public bool UseSignedUrls { get; set; } = true;
     public int SignedUrlExpirySeconds { get; set; } = 3600;
+    public bool AllowInvalidTls { get; set; } = false;
 }
