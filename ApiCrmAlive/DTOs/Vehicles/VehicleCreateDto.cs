@@ -18,8 +18,16 @@ public class VehicleCreateDto
 
     public decimal? CostPrice { get; set; }
     public string? Description { get; set; }
-    public List<string>? Features { get; set; }        
-    public List<string>? Images { get; set; }              
+    public List<string>? Features { get; set; }
+    public List<string>? Photos { get; set; }
+
+    // Backward compatibility: some clients still send "images".
+    [JsonPropertyName("images")]
+    public List<string>? Images
+    {
+        get => Photos;
+        set => Photos = value;
+    }
     public Guid? PreviousOwnerId { get; set; }
     public VehicleStatusEnum? Status { get; set; }
 

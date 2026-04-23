@@ -151,9 +151,23 @@ public sealed class SupabaseFileUploader : IFileUploader
             if (string.IsNullOrWhiteSpace(raw))
                 continue;
 
+            if (TryGetExternalAbsoluteUrl(raw, out var externalUrl))
+            {
+                urls.Add(externalUrl);
+                continue;
+            }
+
             var objectName = ExtractObjectName(raw);
             if (string.IsNullOrWhiteSpace(objectName))
                 continue;
+
+            // Legacy/corrupted records may contain an external URL wrapped as a Supabase object path.
+            // If the extracted "object" is actually an absolute URL, return it directly.
+            if (TryGetExternalAbsoluteUrl(objectName, out var externalFromObject))
+            {
+                urls.Add(externalFromObject);
+                continue;
+            }
 
             if (_options.UseSignedUrls)
             {
@@ -233,7 +247,8 @@ public sealed class SupabaseFileUploader : IFileUploader
 
     private string ExtractObjectName(string value)
     {
-        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri))
+        var normalized = NormalizeHttpUrl(value);
+        if (!Uri.TryCreate(normalized, UriKind.Absolute, out var uri))
             return CleanObjectName(value.TrimStart('/'));
 
         var path = uri.AbsolutePath.Trim('/');
@@ -258,6 +273,69 @@ public sealed class SupabaseFileUploader : IFileUploader
             return CleanObjectName(decodedPath[uploadsIndex..]);
 
         return CleanObjectName(decodedPath);
+    }
+
+    private bool TryGetExternalAbsoluteUrl(string value, out string url)
+    {
+        url = string.Empty;
+        foreach (var candidate in ExpandExternalUrlCandidates(value))
+        {
+            var normalized = NormalizeHttpUrl(candidate);
+            if (!Uri.TryCreate(normalized, UriKind.Absolute, out var uri))
+                continue;
+
+            if (!uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) &&
+                !uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (uri.AbsolutePath.Contains("/storage/v1/object/", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            url = uri.ToString();
+            return true;
+        }
+
+        return false;
+    }
+
+    private static IEnumerable<string> ExpandExternalUrlCandidates(string value)
+    {
+        var trimmed = value.Trim();
+        yield return trimmed;
+
+        if (trimmed.Contains('%'))
+        {
+            string decoded;
+            try
+            {
+                decoded = Uri.UnescapeDataString(trimmed);
+            }
+            catch
+            {
+                yield break;
+            }
+
+            if (!string.Equals(decoded, trimmed, StringComparison.Ordinal))
+                yield return decoded;
+        }
+    }
+
+    private static string NormalizeHttpUrl(string value)
+    {
+        var trimmed = value.Trim();
+        if (trimmed.StartsWith("https:/", StringComparison.OrdinalIgnoreCase) &&
+            !trimmed.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            return "https://" + trimmed["https:/".Length..].TrimStart('/');
+        }
+
+        if (trimmed.StartsWith("http:/", StringComparison.OrdinalIgnoreCase) &&
+            !trimmed.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+        {
+            return "http://" + trimmed["http:/".Length..].TrimStart('/');
+        }
+
+        return trimmed;
     }
 
     private static async Task<byte[]> ToBytesAsync(IFormFile file)

@@ -1,5 +1,6 @@
 ﻿using ApiCrmAlive.Utils;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace ApiCrmAlive.DTOs.Vehicles;
 
@@ -22,6 +23,14 @@ public sealed class VehiclePutDto
     public string? Description { get; set; }
     public List<string>? Features { get; set; }
     public List<string>? Photos { get; set; }
+
+    // Backward compatibility: some clients still send "images".
+    [JsonPropertyName("images")]
+    public List<string>? Images
+    {
+        get => Photos;
+        set => Photos = value;
+    }
 
     public Guid? PreviousOwnerId { get; set; }
 

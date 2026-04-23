@@ -65,7 +65,7 @@ public class VehicleMapper()
         EntryDate = dto.EntryDate.Date,
         Description = string.IsNullOrWhiteSpace(dto.Description) ? null : dto.Description.Trim(),
         Features = dto.Features?.Where(NotEmpty).Select(s => s!.Trim()).ToList(),
-        Photos = dto.Images?.Where(NotEmpty).Select(s => s!.Trim()).ToList() ?? [],
+        Photos = dto.Photos?.Where(NotEmpty).Select(s => s!.Trim()).ToList() ?? [],
         PreviousOwnerId = dto.PreviousOwnerId,
         CreatedAt = DateTime.UtcNow,
         UpdatedAt = DateTime.UtcNow,

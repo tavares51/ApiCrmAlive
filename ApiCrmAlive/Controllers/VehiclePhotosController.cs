@@ -196,24 +196,87 @@ namespace ApiCrmAlive.Controllers
                 return s.TrimStart('/');
             }
 
-            if (!Uri.TryCreate(value, UriKind.Absolute, out var uri))
-                return clean(value);
+            var normalizedValue = NormalizeHttpUrl(value);
+            if (!Uri.TryCreate(normalizedValue, UriKind.Absolute, out var uri))
+                return clean(normalizedValue);
 
             var path = Uri.UnescapeDataString(uri.AbsolutePath.Trim('/'));
             var uploadsIndex = path.IndexOf("uploads/", StringComparison.OrdinalIgnoreCase);
             if (uploadsIndex >= 0)
                 return clean(path[uploadsIndex..]);
 
-            var objectSignIndex = path.IndexOf("/object/sign/", StringComparison.OrdinalIgnoreCase);
-            if (objectSignIndex >= 0)
+            if (TryExtractObjectNameFromStoragePath(path, out var objectName))
+                return clean(objectName);
+
+            // URL externa/legada: preserva o valor original sem forçar caminho de objeto.
+            return clean(normalizedValue);
+        }
+
+        private static bool TryExtractObjectNameFromStoragePath(string path, out string objectName)
+        {
+            objectName = string.Empty;
+
+            // storage/v1/object/public/{bucket}/{object}
+            var publicMarker = "storage/v1/object/public/";
+            var publicIndex = path.IndexOf(publicMarker, StringComparison.OrdinalIgnoreCase);
+            if (publicIndex >= 0)
             {
-                var signTail = path[(objectSignIndex + "/object/sign/".Length)..];
-                var firstSlash = signTail.IndexOf('/');
-                if (firstSlash >= 0 && firstSlash + 1 < signTail.Length)
-                    return clean(signTail[(firstSlash + 1)..]);
+                var tail = path[(publicIndex + publicMarker.Length)..];
+                var firstSlash = tail.IndexOf('/');
+                if (firstSlash >= 0 && firstSlash + 1 < tail.Length)
+                {
+                    objectName = tail[(firstSlash + 1)..];
+                    return true;
+                }
             }
 
-            return clean(path);
+            // storage/v1/object/sign/{bucket}/{object}
+            var signMarker = "storage/v1/object/sign/";
+            var signIndex = path.IndexOf(signMarker, StringComparison.OrdinalIgnoreCase);
+            if (signIndex >= 0)
+            {
+                var tail = path[(signIndex + signMarker.Length)..];
+                var firstSlash = tail.IndexOf('/');
+                if (firstSlash >= 0 && firstSlash + 1 < tail.Length)
+                {
+                    objectName = tail[(firstSlash + 1)..];
+                    return true;
+                }
+            }
+
+            // storage/v1/object/{bucket}/{object}
+            var objectMarker = "storage/v1/object/";
+            var objectIndex = path.IndexOf(objectMarker, StringComparison.OrdinalIgnoreCase);
+            if (objectIndex >= 0)
+            {
+                var tail = path[(objectIndex + objectMarker.Length)..];
+                var firstSlash = tail.IndexOf('/');
+                if (firstSlash >= 0 && firstSlash + 1 < tail.Length)
+                {
+                    objectName = tail[(firstSlash + 1)..];
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static string NormalizeHttpUrl(string value)
+        {
+            var trimmed = value.Trim();
+            if (trimmed.StartsWith("https:/", StringComparison.OrdinalIgnoreCase) &&
+                !trimmed.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                return "https://" + trimmed["https:/".Length..].TrimStart('/');
+            }
+
+            if (trimmed.StartsWith("http:/", StringComparison.OrdinalIgnoreCase) &&
+                !trimmed.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+            {
+                return "http://" + trimmed["http:/".Length..].TrimStart('/');
+            }
+
+            return trimmed;
         }
 
     }

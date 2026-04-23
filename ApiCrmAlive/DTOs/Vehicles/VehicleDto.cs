@@ -1,5 +1,6 @@
 ﻿using ApiCrmAlive.Utils;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace ApiCrmAlive.DTOs.Vehicles;
 
@@ -21,8 +22,16 @@ public class VehicleDto
     public VehicleStatusEnum Status { get; set; } = VehicleStatusEnum.Rascunho;          
     public DateTime EntryDate { get; set; }
     public string? Description { get; set; }
-    public List<string> Features { get; set; } = [];    
-    public List<string> Photos { get; set; } = [];  
+    public List<string> Features { get; set; } = [];
+    public List<string> Photos { get; set; } = [];
+
+    // Backward compatibility: return "images" with the same data as "photos".
+    [JsonPropertyName("images")]
+    public List<string> Images
+    {
+        get => Photos;
+        set => Photos = value ?? [];
+    }
 
     public Guid? PreviousOwnerId { get; set; }
 
