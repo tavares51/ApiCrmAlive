@@ -83,34 +83,31 @@ public class LeadService(ILeadRepository repo, IUnitOfWork uow, IEvolutionWhatsa
                         // Assignment rule:
                         // - Company.HasSdr = true  => assign to SDR users.
                         // - Company.HasSdr = false => assign to Vendedor users.
-                        // If the creator user has a company, keep assignment scoped to that company.
+                        // Always scope assignment to the authenticated user's company.
                         var creatorCompanyId = await _db.Users
                             .AsNoTracking()
                             .Where(u => u.Id == userId)
                             .Select(u => u.CompanyId)
                             .FirstOrDefaultAsync(ct);
 
-                        var companyHasSdr = false;
-                        if (creatorCompanyId.HasValue)
-                        {
-                            companyHasSdr = await _db.Companies
-                                .AsNoTracking()
-                                .Where(c => c.Id == creatorCompanyId.Value)
-                                .Select(c => c.HasSdr)
-                                .FirstOrDefaultAsync(ct);
-                        }
+                        if (!creatorCompanyId.HasValue)
+                            throw new UnauthorizedAccessException("Usuário não possui empresa associada.");
 
-                        var assigneeRole = companyHasSdr ? "sdr" : "vendedor";
+                        var companyConfig = await _db.Companies
+                            .AsNoTracking()
+                            .Where(c => c.Id == creatorCompanyId.Value)
+                            .Select(c => new { c.Id, c.HasSdr })
+                            .SingleOrDefaultAsync(ct)
+                            ?? throw new InvalidOperationException("Empresa associada ao usuário não encontrada.");
+
+                        var assigneeRole = companyConfig.HasSdr ? "sdr" : "vendedor";
                         var assigneesQuery = _db.Users
                             .AsNoTracking()
                             // Role is stored as free text; be tolerant to case differences.
-                            .Where(u => u.IsActive && EF.Functions.ILike(u.Role, assigneeRole));
-
-                        if (creatorCompanyId.HasValue)
-                        {
-                            var companyId = creatorCompanyId.Value;
-                            assigneesQuery = assigneesQuery.Where(u => u.CompanyId == companyId);
-                        }
+                            .Where(u =>
+                                u.IsActive &&
+                                u.CompanyId == companyConfig.Id &&
+                                EF.Functions.ILike(u.Role, assigneeRole));
 
                         var sellers = await assigneesQuery
                             .OrderBy(u => u.CreatedAt)
@@ -135,6 +132,7 @@ public class LeadService(ILeadRepository repo, IUnitOfWork uow, IEvolutionWhatsa
 
                         var normalizedDto = dto with { Phone = normalizedPhone };
                         var entity = LeadMapper.FromCreateDto(normalizedDto, userId);
+                        entity.CompanyId = companyConfig.Id;
                         entity.SellerId = assignedSellerId;
 
                         await _db.Leads.AddAsync(entity, ct);

@@ -47,7 +47,7 @@ public class LeadsController(ILeadService service, AppDbContext ctx) : Controlle
     [SwaggerResponse(409, "Já existe lead com esse telefone")]
     public async Task<IActionResult> CreateAuto([FromBody] LeadCreateDto dto, CancellationToken ct)
     {
-        var userId = Guid.NewGuid(); // TODO: substituir pelo usuário autenticado
+        var userId = User.GetUserIdOrThrow();
         var created = await _service.CreateAutoAssignAsync(dto, userId, ct);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
