@@ -83,22 +83,14 @@ public class LeadService(ILeadRepository repo, IUnitOfWork uow, IEvolutionWhatsa
                         // Assignment rule:
                         // - Company.HasSdr = true  => assign to SDR users.
                         // - Company.HasSdr = false => assign to Vendedor users.
-                        // Always scope assignment to the authenticated user's company.
-                        var creatorCompanyId = await _db.Users
-                            .AsNoTracking()
-                            .Where(u => u.Id == userId)
-                            .Select(u => u.CompanyId)
-                            .FirstOrDefaultAsync(ct);
-
-                        if (!creatorCompanyId.HasValue)
-                            throw new UnauthorizedAccessException("Usuário não possui empresa associada.");
-
+                        // Ambiente atual é single-tenant: usa a primeira empresa cadastrada.
                         var companyConfig = await _db.Companies
                             .AsNoTracking()
-                            .Where(c => c.Id == creatorCompanyId.Value)
+                            .OrderBy(c => c.CreatedAt)
+                            .ThenBy(c => c.Id)
                             .Select(c => new { c.Id, c.HasSdr })
-                            .SingleOrDefaultAsync(ct)
-                            ?? throw new InvalidOperationException("Empresa associada ao usuário não encontrada.");
+                            .FirstOrDefaultAsync(ct)
+                            ?? throw new InvalidOperationException("Nenhuma empresa cadastrada.");
 
                         var assigneeRole = companyConfig.HasSdr ? "sdr" : "vendedor";
                         var assigneesQuery = _db.Users
