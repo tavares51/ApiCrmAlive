@@ -14,6 +14,9 @@ namespace ApiCrmAlive.Services.Leads;
 
 public class LeadService(ILeadRepository repo, IUnitOfWork uow, IEvolutionWhatsappService whatsappService, AppDbContext db) : ILeadService
 {
+    private const int SellerQueueVendedorId = 1;
+    private const int SellerQueueSdrId = 2;
+
     private readonly ILeadRepository _repo = repo;
     private readonly IUnitOfWork _uow = uow;
     private readonly IEvolutionWhatsappService _whatsappService = whatsappService;
@@ -92,35 +95,50 @@ public class LeadService(ILeadRepository repo, IUnitOfWork uow, IEvolutionWhatsa
                             .FirstOrDefaultAsync(ct)
                             ?? throw new InvalidOperationException("Nenhuma empresa cadastrada.");
 
-                        var assigneeRole = companyConfig.HasSdr ? "sdr" : "vendedor";
-                        var assigneesQuery = _db.Users
+                        var assigneeRoleEnum = companyConfig.HasSdr ? RoleEnum.sdr : RoleEnum.vendedor;
+                        var assigneeRole = assigneeRoleEnum.ToString();
+
+                        // Primeiro, tenta usuários ativos da empresa atual.
+                        var sellers = await _db.Users
                             .AsNoTracking()
-                            // Role is stored as free text; be tolerant to case differences.
                             .Where(u =>
                                 u.IsActive &&
-                                u.CompanyId == companyConfig.Id &&
-                                EF.Functions.ILike(u.Role, assigneeRole));
-
-                        var sellers = await assigneesQuery
+                                u.Role != null &&
+                                EF.Functions.ILike(u.Role.Trim(), assigneeRole))
                             .OrderBy(u => u.CreatedAt)
                             .ThenBy(u => u.Id)
                             .Select(u => u.Id)
                             .ToListAsync(ct);
 
-                        Guid? assignedSellerId = null;
-                        if (sellers.Count > 0)
+                        // Fallback para bases legadas onde usuário pode estar sem CompanyId.
+                        if (sellers.Count == 0)
                         {
-                            var state = await _db.SellerQueueStates.FirstOrDefaultAsync(s => s.Id == 1, ct);
-                            if (state is null)
-                            {
-                                state = new SellerQueueState { Id = 1, LastSellerId = null, UpdatedAt = DateTime.UtcNow };
-                                _db.SellerQueueStates.Add(state);
-                            }
-
-                            assignedSellerId = PickNextSeller(sellers, state.LastSellerId);
-                            state.LastSellerId = assignedSellerId;
-                            state.UpdatedAt = DateTime.UtcNow;
+                            sellers = await _db.Users
+                                .AsNoTracking()
+                                .Where(u =>
+                                    u.IsActive &&
+                                    u.Role != null &&
+                                    EF.Functions.ILike(u.Role.Trim(), assigneeRole))
+                                .OrderBy(u => u.CreatedAt)
+                                .ThenBy(u => u.Id)
+                                .Select(u => u.Id)
+                                .ToListAsync(ct);
                         }
+
+                        if (sellers.Count == 0)
+                            throw new InvalidOperationException($"Nenhum usuário ativo com perfil '{assigneeRole}' foi encontrado para distribuição.");
+
+                        var queueStateId = assigneeRoleEnum == RoleEnum.sdr ? SellerQueueSdrId : SellerQueueVendedorId;
+                        var state = await _db.SellerQueueStates.FirstOrDefaultAsync(s => s.Id == queueStateId, ct);
+                        if (state is null)
+                        {
+                            state = new SellerQueueState { Id = queueStateId, LastSellerId = null, UpdatedAt = DateTime.UtcNow };
+                            _db.SellerQueueStates.Add(state);
+                        }
+
+                        var assignedSellerId = PickNextSeller(sellers, state.LastSellerId);
+                        state.LastSellerId = assignedSellerId;
+                        state.UpdatedAt = DateTime.UtcNow;
 
                         var normalizedDto = dto with { Phone = normalizedPhone };
                         var entity = LeadMapper.FromCreateDto(normalizedDto, userId);
