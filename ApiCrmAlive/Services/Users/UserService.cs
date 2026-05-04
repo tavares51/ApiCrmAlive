@@ -60,6 +60,7 @@ public class UserService(IUserRepository repo,
         if (input.Name is not null) user.Name = input.Name.Trim();
         if (input.Phone is not null) user.Phone = string.IsNullOrWhiteSpace(input.Phone) ? null : input.Phone.Trim();
         if (input.ReceiveNotifications is not null) user.ReceiveNotifications = input.ReceiveNotifications.Value;
+        if (input.Email is not null) user.Email = input.Email.Trim();
 
         user.UpdatedAt = DateTime.UtcNow;
         user.UpdatedBy = updatedBy;
@@ -133,21 +134,42 @@ public class UserService(IUserRepository repo,
             .ToListAsync(ct);
     }
 
-    public async Task<bool> UpdatePasswordAsync(Guid userId, string currentPassword, string newPassword)
+    public async Task<bool> UpdatePasswordAsync(Guid userId, string currentPassword, string newPassword, Guid updatedBy, CancellationToken ct = default)
     {
-        var client = await repo.GetByIdAsync(userId);
-        if (client == null)
+        var user = await repo.GetByIdAsync(userId, ct);
+        if (user == null)
             return false;
 
-        var isValid = AuthHelper.VerifyPasswordHash(currentPassword, client.PasswordHash, client.PasswordSalt);
+        var isValid = AuthHelper.VerifyPasswordHash(currentPassword, user.PasswordHash, user.PasswordSalt);
         if (!isValid)
-            throw new Exception("Senha atual incorreta.");
+            throw new ArgumentException("Senha atual incorreta.");
 
         AuthHelper.CreatePasswordHash(newPassword, out var hash, out var salt);
-        client.PasswordHash = hash;
-        client.PasswordSalt = salt;
+        user.PasswordHash = hash;
+        user.PasswordSalt = salt;
+        user.UpdatedAt = DateTime.UtcNow;
+        user.UpdatedBy = updatedBy;
 
-        return await repo.UpdatePasswordAsync(client);
+        repo.Update(user);
+        await uow.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<bool> ResetPasswordAsync(Guid userId, string newPassword, Guid updatedBy, CancellationToken ct = default)
+    {
+        var user = await repo.GetByIdAsync(userId, ct);
+        if (user == null)
+            return false;
+
+        AuthHelper.CreatePasswordHash(newPassword, out var hash, out var salt);
+        user.PasswordHash = hash;
+        user.PasswordSalt = salt;
+        user.UpdatedAt = DateTime.UtcNow;
+        user.UpdatedBy = updatedBy;
+
+        repo.Update(user);
+        await uow.SaveChangesAsync(ct);
+        return true;
     }
 
     public async Task<User> GetEmailAsync(string email, CancellationToken ct = default)

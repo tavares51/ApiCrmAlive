@@ -18,5 +18,6 @@ public interface IUserService
     bool? isActive = null,
     string? search = null,
     CancellationToken ct = default);
-    Task<bool> UpdatePasswordAsync(Guid userId, string currentPassword, string newPassword);
+    Task<bool> UpdatePasswordAsync(Guid userId, string currentPassword, string newPassword, Guid updatedBy, CancellationToken ct = default);
+    Task<bool> ResetPasswordAsync(Guid userId, string newPassword, Guid updatedBy, CancellationToken ct = default);
 }

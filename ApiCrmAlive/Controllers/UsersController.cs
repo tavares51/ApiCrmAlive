@@ -13,6 +13,7 @@ namespace ApiCrmAlive.Controllers;
 [Produces("application/json")]
 public class UsersController(IUserService service) : ControllerBase
 {
+    private Guid GetActorUserIdOrThrow() => User.GetUserIdOrThrow();
 
     /// <summary>GET /api/users</summary>
     [HttpGet]
@@ -60,7 +61,9 @@ public class UsersController(IUserService service) : ControllerBase
     [SwaggerResponse(409, "E-mail já cadastrado")]
     public async Task<ActionResult<UserDto>> Create([FromBody] UserCreateDto dto, CancellationToken ct)
     {
-        var updatedBy = Guid.NewGuid(); // trocar pelo usuário autenticado
+        var updatedBy = User.Identity?.IsAuthenticated == true
+            ? GetActorUserIdOrThrow()
+            : Guid.Empty;
         var created = await service.CreateAsync(dto, updatedBy, ct);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
@@ -73,7 +76,7 @@ public class UsersController(IUserService service) : ControllerBase
     [SwaggerResponse(404, "Usuário não encontrado")]
     public async Task<ActionResult<UserDto>> Update(Guid id, [FromBody] UserUpdateDto dto, CancellationToken ct)
     {
-        var updatedBy = Guid.NewGuid();
+        var updatedBy = GetActorUserIdOrThrow();
         return Ok(await service.UpdateAsync(id, dto, updatedBy, ct));
     }
 
@@ -95,7 +98,7 @@ public class UsersController(IUserService service) : ControllerBase
     [SwaggerResponse(404, "Usuário não encontrado")]
     public async Task<IActionResult> UpdateStatus(Guid id, [FromQuery] bool isActive, CancellationToken ct)
     {
-        var updatedBy = Guid.NewGuid();
+        var updatedBy = GetActorUserIdOrThrow();
         if (isActive) await service.ActivateAsync(id, updatedBy, ct);
         else await service.DeactivateAsync(id, updatedBy, ct);
         return NoContent();
@@ -121,5 +124,36 @@ public class UsersController(IUserService service) : ControllerBase
 
         var token = jwtService.GenerateToken(user);
         return Ok(new { user.Id, token });
+    }
+
+    /// <summary>PATCH /api/users/me/password</summary>
+    [HttpPatch("me/password")]
+    [Consumes("application/json")]
+    [SwaggerOperation(Summary = "Troca a senha do usuário autenticado")]
+    [SwaggerResponse(204, "Senha atualizada")]
+    [SwaggerResponse(400, "Senha atual inválida")]
+    [SwaggerResponse(404, "Usuário não encontrado")]
+    public async Task<IActionResult> ChangeMyPassword([FromBody] UserPasswordUpdateDto dto, CancellationToken ct)
+    {
+        var actorId = GetActorUserIdOrThrow();
+        var ok = await service.UpdatePasswordAsync(actorId, dto.CurrentPassword, dto.NewPassword, actorId, ct);
+        return ok ? NoContent() : NotFound();
+    }
+
+    /// <summary>PATCH /api/users/:id/password/reset</summary>
+    [HttpPatch("{id:guid}/password/reset")]
+    [Consumes("application/json")]
+    [SwaggerOperation(Summary = "Reseta a senha de um usuário (admin/gerente)")]
+    [SwaggerResponse(204, "Senha resetada")]
+    [SwaggerResponse(403, "Sem permissão")]
+    [SwaggerResponse(404, "Usuário não encontrado")]
+    public async Task<IActionResult> ResetPassword(Guid id, [FromBody] UserPasswordResetDto dto, CancellationToken ct)
+    {
+        if (!RoleUtils.IsManagerOrAdmin(User.GetRole()))
+            return Forbid();
+
+        var actorId = GetActorUserIdOrThrow();
+        var ok = await service.ResetPasswordAsync(id, dto.NewPassword, actorId, ct);
+        return ok ? NoContent() : NotFound();
     }
 }

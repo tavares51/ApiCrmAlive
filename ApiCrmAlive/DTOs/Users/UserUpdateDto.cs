@@ -4,5 +4,6 @@ public record UserUpdateDto(
     string? Name,
     string? Role,
     string? Phone,
-    bool? ReceiveNotifications
+    bool? ReceiveNotifications,
+    string? Email
 );
