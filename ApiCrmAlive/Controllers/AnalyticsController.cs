@@ -54,8 +54,8 @@ public sealed class AnalyticsController(IAnalyticsService service, AppDbContext 
 
     [HttpGet("top-sellers")]
     [AllowAnonymous]
-    [SwaggerOperation(Summary = "Vendedor do mes (Top 5)", Description = "Top vendedores do mes por receita (default top 5).")]
-    [SwaggerResponse(200, "Ranking retornado com sucesso", typeof(IEnumerable<TopSellerDto>))]
+    [SwaggerOperation(Summary = "Top sellers of the month (Top 5)", Description = "Top sellers of the month by revenue (default top 5).")]
+    [SwaggerResponse(200, "Ranking returned successfully", typeof(IEnumerable<TopSellerDto>))]
     public async Task<IActionResult> GetTopSellersOfMonth(
         [FromQuery] int? year,
         [FromQuery] int? month,
@@ -108,8 +108,8 @@ public sealed class AnalyticsController(IAnalyticsService service, AppDbContext 
 
     [HttpGet("vehicles-by-status")]
     [AllowAnonymous]
-    [SwaggerOperation(Summary = "Veiculos por status", Description = "Quantidade de veiculos agrupados por status.")]
-    [SwaggerResponse(200, "Dados retornados com sucesso", typeof(IEnumerable<VehiclesByStatusDto>))]
+    [SwaggerOperation(Summary = "Vehicles by status", Description = "Vehicle count grouped by status.")]
+    [SwaggerResponse(200, "Data returned successfully", typeof(IEnumerable<VehiclesByStatusDto>))]
     public async Task<IActionResult> GetVehiclesByStatus(CancellationToken ct)
     {
         var companyId = await User.GetCompanyIdOrThrowAsync(_ctx, ct);

@@ -29,11 +29,11 @@ public class UsersController(IUserService service) : ControllerBase
         return Ok(users);
     }
 
-    /// <summary>GET /api/users/vendedores</summary>
-    [HttpGet("vendedores")]
-    [SwaggerOperation(Summary = "Lista usuários do tipo vendedor (sem paginação)")]
-    [SwaggerResponse(200, "Lista de vendedores", typeof(IEnumerable<UserDto>))]
-    public async Task<ActionResult<IEnumerable<UserDto>>> GetAllVendedores(
+    /// <summary>GET /api/users/sellers</summary>
+    [HttpGet("sellers")]
+    [SwaggerOperation(Summary = "Lists seller users without pagination")]
+    [SwaggerResponse(200, "Seller list", typeof(IEnumerable<UserDto>))]
+    public async Task<ActionResult<IEnumerable<UserDto>>> GetAllSellers(
         [FromQuery] bool? isActive = null,
         [FromQuery] string? search = null,
         CancellationToken ct = default)

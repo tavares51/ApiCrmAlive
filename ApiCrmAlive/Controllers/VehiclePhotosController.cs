@@ -14,14 +14,13 @@ namespace ApiCrmAlive.Controllers
         private readonly IFileUploader _uploader = uploader;
         private Guid GetActorUserIdOrThrow() => User.GetUserIdOrThrow();
 
-        [HttpPost("veiculo/{id}/fotos")]
         [HttpPost("vehicles/{id:guid}/photos")]
         [SwaggerOperation(
-            Summary = "Adiciona fotos a uma entrada de veículo",
-            Description = "Envia uma ou mais fotos (form-data) para adicionar à entrada existente."
+            Summary = "Adds photos to a vehicle",
+            Description = "Sends one or more photos (form-data) to add to the existing vehicle."
         )]
-        [SwaggerResponse(200, "Fotos adicionadas com sucesso")]
-        [SwaggerResponse(400, "Nenhuma foto válida foi enviada")]
+        [SwaggerResponse(200, "Photos added successfully")]
+        [SwaggerResponse(400, "No valid photos were sent")]
         [Consumes("multipart/form-data")]
         public async Task<IActionResult> AddPhotos(Guid id, [FromForm] List<IFormFile> photos, CancellationToken ct)
         {
@@ -58,20 +57,19 @@ namespace ApiCrmAlive.Controllers
             return Ok(new { id = updated.Id, photos = freshUrls });
         }
 
-        [HttpDelete("veiculo/{id}/fotos/{*fotoId}")]
-        [HttpDelete("vehicles/{id:guid}/photos/{*fotoId}")]
+        [HttpDelete("vehicles/{id:guid}/photos/{*photoId}")]
         [SwaggerOperation(
-            Summary = "Remove uma foto de uma entrada de veículo",
-            Description = "Remove uma foto específica de uma entrada com base em seu ID ou hash no nome da URL."
+            Summary = "Removes a vehicle photo",
+            Description = "Removes a specific photo from a vehicle based on its ID or URL filename hash."
         )]
-        [SwaggerResponse(200, "Foto removida com sucesso")]
-        [SwaggerResponse(404, "Entrada/foto não encontrada")]
-        public async Task<IActionResult> DeletePhoto(Guid id, string fotoId, CancellationToken ct)
+        [SwaggerResponse(200, "Photo removed successfully")]
+        [SwaggerResponse(404, "Vehicle/photo not found")]
+        public async Task<IActionResult> DeletePhoto(Guid id, string photoId, CancellationToken ct)
         {
-            if (string.IsNullOrWhiteSpace(fotoId))
-                return BadRequest("Informe o identificador da foto.");
+            if (string.IsNullOrWhiteSpace(photoId))
+                return BadRequest("Provide the photo identifier.");
 
-            var target = Uri.UnescapeDataString(fotoId);
+            var target = Uri.UnescapeDataString(photoId);
             var current = (await _service.GetPhotosAsync(id, ct))
                 .Select(NormalizePhotoReference)
                 .Where(p => !string.IsNullOrWhiteSpace(p))
@@ -83,7 +81,7 @@ namespace ApiCrmAlive.Controllers
                 .ToList();
 
             if (filtered.Count == current.Count)
-                return NotFound("Foto não encontrada para o veículo informado.");
+                return NotFound("Photo not found for the provided vehicle.");
 
             await _service.PatchAsync(
                 id,
@@ -91,17 +89,16 @@ namespace ApiCrmAlive.Controllers
                 GetActorUserIdOrThrow(),
                 ct);
 
-            return Ok(new { success = true, message = "Foto removida com sucesso" });
+            return Ok(new { success = true, message = "Photo removed successfully" });
         }
 
-        [HttpGet("veiculo/{id}/fotos")]
         [HttpGet("vehicles/{id:guid}/photos")]
         [SwaggerOperation(
-            Summary = "Obtém fotos associadas a um veículo",
-            Description = "Retorna as URLs das fotos associadas ao veículo."
+            Summary = "Gets photos associated with a vehicle",
+            Description = "Returns the URLs of the photos associated with the vehicle."
         )]
-        [SwaggerResponse(200, "Fotos do veículo", typeof(IEnumerable<string>))]
-        [SwaggerResponse(404, "Veículo não encontrado")]
+        [SwaggerResponse(200, "Vehicle photos", typeof(IEnumerable<string>))]
+        [SwaggerResponse(404, "Vehicle not found")]
         public async Task<IActionResult> GetPhotos(Guid id, CancellationToken ct)
         {
             var objectNames = (await _service.GetPhotosAsync(id, ct))
@@ -112,13 +109,12 @@ namespace ApiCrmAlive.Controllers
             return Ok(urls);
         }
 
-        [HttpPut("veiculo/{id}/fotos/order")]
         [HttpPut("vehicles/{id:guid}/photos/order")]
         [SwaggerOperation(
-            Summary = "Reordena fotos do veículo",
-            Description = "Aceita { \"photos\": [\"...\"] } ou um array [\"...\"] com a nova ordem.")]
-        [SwaggerResponse(200, "Ordem atualizada com sucesso")]
-        [SwaggerResponse(400, "Payload inválido")]
+            Summary = "Reorders vehicle photos",
+            Description = "Accepts { \"photos\": [\"...\"] } or an array [\"...\"] with the new order.")]
+        [SwaggerResponse(200, "Order updated successfully")]
+        [SwaggerResponse(400, "Invalid payload")]
         public async Task<IActionResult> ReorderPhotos(Guid id, [FromBody] JsonElement body, CancellationToken ct)
         {
             var requested = ExtractPhotosFromBody(body)
@@ -127,7 +123,7 @@ namespace ApiCrmAlive.Controllers
                 .ToList();
 
             if (requested.Count == 0)
-                return BadRequest("Informe a nova ordem das fotos no body.");
+                return BadRequest("Provide the new photo order in the request body.");
 
             var current = (await _service.GetPhotosAsync(id, ct))
                 .Select(NormalizePhotoReference)
@@ -135,7 +131,7 @@ namespace ApiCrmAlive.Controllers
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            // Reordena somente fotos existentes e preserva as restantes no final.
+            // Reorders only existing photos and preserves the remaining ones at the end.
             var currentSet = new HashSet<string>(current, StringComparer.OrdinalIgnoreCase);
             var ordered = requested
                 .Where(currentSet.Contains)

@@ -11,7 +11,6 @@ namespace ApiCrmAlive.Controllers;
 
 [ApiController]
 [Route("api/vehicles")]
-[Route("api/veiculo")]
 [Produces("application/json")]
 public class VehiclesController(IVehicleService service, ICustomerRepository customers, IFileUploader uploader) : ControllerBase
 {
@@ -27,7 +26,7 @@ public class VehiclesController(IVehicleService service, ICustomerRepository cus
 
         if (previousOwnerId.Value == Guid.Empty)
         {
-            ModelState.AddModelError("PreviousOwnerId", "PreviousOwnerId inválido.");
+            ModelState.AddModelError("PreviousOwnerId", "Invalid PreviousOwnerId.");
             return;
         }
 
@@ -36,13 +35,13 @@ public class VehiclesController(IVehicleService service, ICustomerRepository cus
             .AnyAsync(c => c.Id == previousOwnerId.Value, ct);
 
         if (!exists)
-            ModelState.AddModelError("PreviousOwnerId", "Cliente informado em PreviousOwnerId não existe.");
+            ModelState.AddModelError("PreviousOwnerId", "The customer provided in PreviousOwnerId does not exist.");
     }
 
     /// <summary>GET /api/vehicles</summary>
     [HttpGet]
-    [SwaggerOperation(Summary = "Lista veículos com filtros")]
-    [SwaggerResponse(200, "Lista de veículos", typeof(IEnumerable<VehicleDto>))]
+    [SwaggerOperation(Summary = "Lists vehicles with filters")]
+    [SwaggerResponse(200, "Vehicle list", typeof(IEnumerable<VehicleDto>))]
     public async Task<ActionResult<IEnumerable<VehicleDto>>> GetAll(
         [FromQuery] VehicleStatusEnum? status,
         [FromQuery] string? make,
@@ -57,17 +56,17 @@ public class VehiclesController(IVehicleService service, ICustomerRepository cus
 
     /// <summary>GET /api/vehicles/:id</summary>
     [HttpGet("{id:guid}")]
-    [SwaggerOperation(Summary = "Obtém veículo por ID")]
-    [SwaggerResponse(200, "Veículo encontrado", typeof(VehicleDto))]
-    [SwaggerResponse(404, "Veículo não encontrado")]
+    [SwaggerOperation(Summary = "Gets a vehicle by ID")]
+    [SwaggerResponse(200, "Vehicle found", typeof(VehicleDto))]
+    [SwaggerResponse(404, "Vehicle not found")]
     public async Task<ActionResult<VehicleDto>> GetById(Guid id, CancellationToken ct)
         => Ok(await service.GetByIdAsync(id, ct));
 
     /// <summary>GET /api/vehicles/by-plate/:plate</summary>
     [HttpGet("by-plate/{plate}")]
-    [SwaggerOperation(Summary = "Obtém veículo por placa")]
-    [SwaggerResponse(200, "Veículo encontrado", typeof(VehicleDto))]
-    [SwaggerResponse(404, "Não encontrado")]
+    [SwaggerOperation(Summary = "Gets a vehicle by plate")]
+    [SwaggerResponse(200, "Vehicle found", typeof(VehicleDto))]
+    [SwaggerResponse(404, "Not found")]
     public async Task<ActionResult<VehicleDto>> GetByPlate(string plate, CancellationToken ct)
     {
         var v = await service.GetByPlateAsync(plate, ct);
@@ -78,9 +77,9 @@ public class VehiclesController(IVehicleService service, ICustomerRepository cus
     /// <summary>POST /api/vehicles</summary>
     [HttpPost]
     [Consumes("application/json")]
-    [SwaggerOperation(Summary = "Cria um veículo")]
-    [SwaggerResponse(201, "Criado", typeof(VehicleDto))]
-    [SwaggerResponse(409, "Placa já cadastrada")]
+    [SwaggerOperation(Summary = "Creates a vehicle")]
+    [SwaggerResponse(201, "Created", typeof(VehicleDto))]
+    [SwaggerResponse(409, "Plate already registered")]
     public async Task<ActionResult<VehicleDto>> Create([FromBody] VehicleCreateDto dto, CancellationToken ct)
     {
         await ValidatePreviousOwnerAsync(dto.PreviousOwnerId, ct);
@@ -96,10 +95,10 @@ public class VehiclesController(IVehicleService service, ICustomerRepository cus
     [HttpPost]
     [ApiExplorerSettings(IgnoreApi = true)]
     [Consumes("multipart/form-data")]
-    [SwaggerOperation(Summary = "Cria um veículo (form-data) com fotos opcionais")]
-    [SwaggerResponse(201, "Criado", typeof(VehicleDto))]
-    [SwaggerResponse(400, "Payload inválido")]
-    [SwaggerResponse(409, "Placa já cadastrada")]
+    [SwaggerOperation(Summary = "Creates a vehicle (form-data) with optional photos")]
+    [SwaggerResponse(201, "Created", typeof(VehicleDto))]
+    [SwaggerResponse(400, "Invalid payload")]
+    [SwaggerResponse(409, "Plate already registered")]
     public async Task<ActionResult<VehicleDto>> CreateForm(
         [FromForm] VehicleCreateDto dto,
         [FromForm] List<IFormFile>? photos,
@@ -136,16 +135,16 @@ public class VehiclesController(IVehicleService service, ICustomerRepository cus
     [HttpPost("with-photos")]
     [Consumes("multipart/form-data")]
     [SwaggerOperation(
-        Summary = "Cria um veículo com fotos",
-        Description = "Envie o campo 'vehicle' com o JSON do VehicleCreateDto e, opcionalmente, arquivos em 'photos'.")]
-    [SwaggerResponse(201, "Criado", typeof(VehicleDto))]
-    [SwaggerResponse(400, "Payload inválido")]
-    [SwaggerResponse(409, "Placa já cadastrada")]
+        Summary = "Creates a vehicle with photos",
+        Description = "Send the 'vehicle' field with the VehicleCreateDto JSON and, optionally, files in 'photos'.")]
+    [SwaggerResponse(201, "Created", typeof(VehicleDto))]
+    [SwaggerResponse(400, "Invalid payload")]
+    [SwaggerResponse(409, "Plate already registered")]
     public async Task<ActionResult<VehicleDto>> CreateWithPhotos([FromForm] VehicleCreateWithPhotosFormDto form, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(form.Vehicle))
         {
-            ModelState.AddModelError(nameof(form.Vehicle), "Campo 'vehicle' é obrigatório.");
+            ModelState.AddModelError(nameof(form.Vehicle), "The 'vehicle' field is required.");
             return ValidationProblem(ModelState);
         }
 
@@ -158,13 +157,13 @@ public class VehiclesController(IVehicleService service, ICustomerRepository cus
         }
         catch (JsonException ex)
         {
-            ModelState.AddModelError(nameof(form.Vehicle), $"JSON inválido: {ex.Message}");
+            ModelState.AddModelError(nameof(form.Vehicle), $"Invalid JSON: {ex.Message}");
             return ValidationProblem(ModelState);
         }
 
         if (dto is null)
         {
-            ModelState.AddModelError(nameof(form.Vehicle), "Não foi possível desserializar o JSON do veículo.");
+            ModelState.AddModelError(nameof(form.Vehicle), "Could not deserialize the vehicle JSON.");
             return ValidationProblem(ModelState);
         }
 
@@ -199,9 +198,9 @@ public class VehiclesController(IVehicleService service, ICustomerRepository cus
     /// <summary>PUT /api/vehicles/:id</summary>
     [HttpPut("{id:guid}")]
     [Consumes("application/json")]
-    [SwaggerOperation(Summary = "Atualiza um veículo")]
-    [SwaggerResponse(200, "Atualizado", typeof(VehicleDto))]
-    [SwaggerResponse(404, "Não encontrado")]
+    [SwaggerOperation(Summary = "Updates a vehicle")]
+    [SwaggerResponse(200, "Updated", typeof(VehicleDto))]
+    [SwaggerResponse(404, "Not found")]
     public async Task<ActionResult<VehicleDto>> Update(Guid id, [FromBody] VehiclePutDto dto, CancellationToken ct)
     {
         await ValidatePreviousOwnerAsync(dto.PreviousOwnerId, ct);
@@ -215,9 +214,9 @@ public class VehiclesController(IVehicleService service, ICustomerRepository cus
     /// <summary>PATCH /api/vehicles/:id</summary>
     [HttpPatch("{id:guid}")]
     [Consumes("application/json")]
-    [SwaggerOperation(Summary = "Atualiza parcialmente um veículo")]
-    [SwaggerResponse(200, "Atualizado", typeof(VehicleDto))]
-    [SwaggerResponse(404, "Não encontrado")]
+    [SwaggerOperation(Summary = "Partially updates a vehicle")]
+    [SwaggerResponse(200, "Updated", typeof(VehicleDto))]
+    [SwaggerResponse(404, "Not found")]
     public async Task<ActionResult<VehicleDto>> Patch(Guid id, [FromBody] VehicleUpdateDto dto, CancellationToken ct)
     {
         await ValidatePreviousOwnerAsync(dto.PreviousOwnerId, ct);
@@ -230,8 +229,8 @@ public class VehiclesController(IVehicleService service, ICustomerRepository cus
 
     /// <summary>PATCH /api/vehicles/:id/status</summary>
     [HttpPatch("{id:guid}/status")]
-    [SwaggerOperation(Summary = "Altera status do veículo")]
-    [SwaggerResponse(204, "Atualizado")]
+    [SwaggerOperation(Summary = "Updates the vehicle status")]
+    [SwaggerResponse(204, "Updated")]
     public async Task<IActionResult> UpdateStatus(Guid id, [FromQuery] VehicleStatusEnum status, CancellationToken ct)
     {
         var updatedBy = GetActorUserIdOrThrow();
@@ -241,8 +240,8 @@ public class VehiclesController(IVehicleService service, ICustomerRepository cus
 
     /// <summary>DELETE /api/vehicles/:id</summary>
     [HttpDelete("{id:guid}")]
-    [SwaggerOperation(Summary = "Remove um veículo")]
-    [SwaggerResponse(204, "Removido")]
+    [SwaggerOperation(Summary = "Deletes a vehicle")]
+    [SwaggerResponse(204, "Deleted")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
         await service.DeleteAsync(id, ct);
