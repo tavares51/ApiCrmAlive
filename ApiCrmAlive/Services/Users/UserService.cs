@@ -1,4 +1,5 @@
-﻿using ApiCrmAlive.DTOs.Users;
+﻿using ApiCrmAlive.Context;
+using ApiCrmAlive.DTOs.Users;
 using ApiCrmAlive.Models;
 using ApiCrmAlive.Repositories.Users;
 using ApiCrmAlive.Services;
@@ -10,7 +11,8 @@ using System.Linq;
 namespace ApiCrmAlive.Services.Users;
 
 public class UserService(IUserRepository repo,
-                   IUnitOfWork uow) : IUserService
+                   IUnitOfWork uow,
+                   AppDbContext db) : IUserService
 {
     private static readonly HashSet<string> AllowedRoles = [.. new[] { "admin", "gerente", "vendedor", "sdr" }];
 
@@ -107,6 +109,14 @@ public class UserService(IUserRepository repo,
     public async Task DeleteAsync(Guid id, CancellationToken ct = default)
     {
         var user = await repo.GetByIdAsync(id, ct) ?? throw new KeyNotFoundException("Usuário não encontrado.");
+
+        var hasAssociatedLeads = await db.Leads
+            .AsNoTracking()
+            .AnyAsync(l => l.SellerId == id, ct);
+
+        if (hasAssociatedLeads)
+            throw new InvalidOperationException("Não é possível excluir o usuário, pois existem leads associadas a ele.");
+
         repo.Remove(user);
         await uow.SaveChangesAsync(ct);
     }
