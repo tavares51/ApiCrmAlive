@@ -15,6 +15,7 @@ namespace ApiCrmAlive.Controllers
         private Guid GetActorUserIdOrThrow() => User.GetUserIdOrThrow();
 
         [HttpPost("vehicles/{id:guid}/photos")]
+        [HttpPost("veiculo/{id:guid}/fotos")]
         [SwaggerOperation(
             Summary = "Adds photos to a vehicle",
             Description = "Sends one or more photos (form-data) to add to the existing vehicle."
@@ -22,15 +23,19 @@ namespace ApiCrmAlive.Controllers
         [SwaggerResponse(200, "Photos added successfully")]
         [SwaggerResponse(400, "No valid photos were sent")]
         [Consumes("multipart/form-data")]
-        public async Task<IActionResult> AddPhotos(Guid id, [FromForm] List<IFormFile> photos, CancellationToken ct)
+        public async Task<IActionResult> AddPhotos(Guid id, [FromForm] List<IFormFile>? photos, CancellationToken ct)
         {
             var vehicle = await _service.GetByIdAsync(id, ct);
             if (vehicle == null) return NotFound();
 
-            if (photos == null || !photos.Any(p => p.Length > 0))
+            var photoFiles = (photos is { Count: > 0 } ? photos : Request.Form.Files.ToList())
+                .Where(p => p.Length > 0)
+                .ToList();
+
+            if (photoFiles.Count == 0)
                 return BadRequest("Nenhuma foto válida foi enviada.");
 
-            var newObjectNames = await UploadPhotos(photos);
+            var newObjectNames = await UploadPhotos(photoFiles);
             if (newObjectNames.Count == 0)
                 return BadRequest("Nenhuma foto foi adicionada com sucesso.");
 
